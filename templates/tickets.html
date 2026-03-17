@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Saved Tickets</title>
+    <style>
+        body {
+            font-family: Arial;
+            max-width: 900px;
+            margin: auto;
+            padding: 40px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+        .won {background:#c8f7c5;}
+        .lost {background:#f7c5c5;}
+        .pending {background:#eee;}
+    </style>
+</head>
+<body>
+    <h2>Saved Tickets</h2>
+    {% if tickets %}
+        {% for ticket in tickets %}
+            <h3>Ticket ID: {{ ticket.id }} | URL: <a href="{{ ticket.url }}" target="_blank">{{ ticket.url }}</a> | Events: {{ ticket.event_count }}</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Player</th>
+                        <th>Match</th>
+                        <th>Odd</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for player in ticket.players %}
+                        {% for pair in player.pairs %}
+                        <tr class="{{ pair.status }}">
+                            <td>Player {{ player.number }}</td>
+                            <td>{{ pair.match }}</td>
+                            <td>{{ pair.odd or "-" }}</td>
+                            <td>{{ pair.status }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endfor %}
+    {% else %}
+        <p>No tickets saved yet.</p>
+    {% endif %}
+</body>
+</html>

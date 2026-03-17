@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+
+<body>
+
+<h2>Leaderboard</h2>
+
+<a href="/">Back</a>
+
+<table border="1">
+
+<tr>
+<th>Player</th>
+<th>Total</th>
+<th>Wins</th>
+<th>Losses</th>
+</tr>
+
+{% for r in rows %}
+
+<tr>
+<td>Player {{r.player_id}}</td>
+<td>{{r.total}}</td>
+<td>{{r.wins}}</td>
+<td>{{r.losses}}</td>
+</tr>
+
+{% endfor %}
+
+</table>
+
+</body>
+</html>

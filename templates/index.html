@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PSK Ticket Tracker</title>
+    <style>
+        body{
+            font-family:Arial;
+            max-width:900px;
+            margin:auto;
+            padding:40px;
+        }
+        table{
+            width:100%;
+            border-collapse:collapse;
+            margin-top:20px;
+        }
+        th,td{
+            border:1px solid #ddd;
+            padding:8px;
+        }
+        .won{background:#c8f7c5;}
+        .lost{background:#f7c5c5;}
+        .pending{background:#eee;}
+    </style>
+</head>
+<body>
+
+<h2>PSK Ticket Tracker</h2>
+
+<input id="url" style="width:100%;padding:10px" placeholder="Paste ticket link">
+<button onclick="scrape()">Load Ticket</button>
+
+<table>
+    <thead>
+        <tr>
+            <th>Player</th>
+            <th>Match</th>
+            <th>Odd</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody id="table"></tbody>
+</table>
+
+<script>
+async function scrape(){
+    const url = document.getElementById("url").value;
+
+    const res = await fetch("/scrape", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({url:url})
+    });
+
+    const data = await res.json();
+    const table = document.getElementById("table");
+    table.innerHTML = "";
+
+    data.players.forEach(p => {
+        p.pairs.forEach(pair => {
+            const row = document.createElement("tr");
+            row.className = pair.status;
+
+            row.innerHTML =
+                "<td>Player " + p.player + "</td>" +
+                "<td>" + pair.match + "</td>" +
+                "<td>" + (pair.odd || "-") + "</td>" +
+                "<td>" + pair.status + "</td>";
+
+            table.appendChild(row);
+        });
+    });
+}
+</script>
+
+</body>
+</html>
