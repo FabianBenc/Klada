@@ -1,33 +1,49 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en" x-data>
+<head>
+    <meta charset="UTF-8">
+    <title>Leaderboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
 <body>
 
-<h2>Leaderboard</h2>
+<h1>Leaderboard</h1>
 
-<a href="/">Back</a>
-
-<table border="1">
-
-<tr>
-<th>Player</th>
-<th>Total</th>
-<th>Wins</th>
-<th>Losses</th>
-</tr>
-
-{% for r in rows %}
-
-<tr>
-<td>Player {{r.player_id}}</td>
-<td>{{r.total}}</td>
-<td>{{r.wins}}</td>
-<td>{{r.losses}}</td>
-</tr>
-
-{% endfor %}
-
+<table>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Player</th>
+            <th>Guessed ✅</th>
+            <th>Missed ❌</th>
+            <th>Win Rate (%)</th>
+            <th>Avg Odds</th>
+            <th>Best Odds</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for player in data %}
+        <tr>
+            <td>
+                {% if loop.index == 1 %} 🥇
+                {% elif loop.index == 2 %} 🥈
+                {% elif loop.index == 3 %} 🥉
+                {% else %} {{ loop.index }} {% endif %}
+            </td>
+            <td>{{ player.name }}</td>
+            <td class="WON">{{ player.guessed }}</td>
+            <td class="LOST">{{ player.missed }}</td>
+            <td>{{ player.win_rate }}</td>
+            <td>{{ player.avg_odds }}</td>
+            <td>{{ player.max_win }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
 </table>
+
+<br>
+<a href="/"><button>⬅ Back</button></a>
 
 </body>
 </html>

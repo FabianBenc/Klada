@@ -1,75 +1,123 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" x-data="ticketApp()">
 <head>
-    <title>PSK Ticket Tracker</title>
+    <meta charset="UTF-8">
+    <title>Betting Tickets</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <style>
-        body{
-            font-family:Arial;
-            max-width:900px;
-            margin:auto;
-            padding:40px;
+        /* Modal styling */
+        .modal-bg {
+            background: rgba(0,0,0,0.5);
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        table{
-            width:100%;
-            border-collapse:collapse;
-            margin-top:20px;
+        .modal {
+            background: #fff8f0;
+            padding: 20px;
+            border: 1px solid #d1c7b7;
+            font-family: 'Courier New', monospace;
+            width: 300px;
+            border-radius: 8px;
         }
-        th,td{
-            border:1px solid #ddd;
-            padding:8px;
+        .modal input {
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 8px;
         }
-        .won{background:#c8f7c5;}
-        .lost{background:#f7c5c5;}
-        .pending{background:#eee;}
+        .modal button {
+            width: 100%;
+        }
     </style>
 </head>
 <body>
 
-<h2>PSK Ticket Tracker</h2>
+<h1>Betting Tickets</h1>
 
-<input id="url" style="width:100%;padding:10px" placeholder="Paste ticket link">
-<button onclick="scrape()">Load Ticket</button>
+<!-- Admin Login / Logout -->
+<div x-show="!admin_logged_in">
+    <button @click="loginModal=true">Admin Login</button>
+</div>
+<div x-show="admin_logged_in">
+    <p>Logged in as admin | <a href="/logout">Logout</a></p>
+</div>
 
-<table>
-    <thead>
-        <tr>
-            <th>Player</th>
-            <th>Match</th>
-            <th>Odd</th>
-            <th>Status</th>
-        </tr>
-    </thead>
-    <tbody id="table"></tbody>
-</table>
+<!-- Admin Ticket Form -->
+<form method="POST" x-show="admin_logged_in">
+    <input type="text" name="ticket_number" placeholder="Enter Ticket Number" required>
+    <button type="submit">Add Ticket</button>
+</form>
+
+<a href="/update"><button>Update Results</button></a>
+<a href="/leaderboard"><button>Leaderboard</button></a>
+
+<hr>
+
+<!-- Search -->
+<input type="text" x-model="search" placeholder="Search tickets or players..." style="margin-bottom:20px;width:400px;">
+
+<div>
+    {% for ticket in tickets %}
+    <div x-data="{ open: true }" x-show="filterTicket('{{ ticket[1] }}')" x-transition>
+        <h2 @click="open = !open" style="cursor: pointer;">
+            Ticket: {{ ticket[1] }} 
+            <span x-text="open ? '▼' : '▶'"></span>
+        </h2>
+        <p>Created: {{ ticket[2] }} | Last updated: {{ ticket[3] }}</p>
+
+        <table x-show="open" x-transition>
+            <thead>
+                <tr>
+                    <th>Player</th>
+                    <th>Fixture</th>
+                    <th>Odds</th>
+                    <th>Result</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for bet in bets %}
+                {% if bet[0] == ticket[0] %}
+                <tr x-show="filterTicket('{{ player_names.get(bet[1], 'Unknown') }}')">
+                    <td>{{ player_names.get(bet[1], "Unknown") }}</td>
+                    <td>{{ bet[2] }}</td>
+                    <td>{{ bet[3] }}</td>
+                    <td class="{{ bet[4] }}">{{ bet[4] }}</td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+        <hr>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Modal Login -->
+<div x-show="loginModal" class="modal-bg" @click.self="loginModal=false">
+    <div class="modal">
+        <h2>Admin Login</h2>
+        <form method="POST" action="/login">
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit">Login</button>
+        </form>
+        <button @click="loginModal=false" style="margin-top:10px;">Cancel</button>
+    </div>
+</div>
 
 <script>
-async function scrape(){
-    const url = document.getElementById("url").value;
-
-    const res = await fetch("/scrape", {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({url:url})
-    });
-
-    const data = await res.json();
-    const table = document.getElementById("table");
-    table.innerHTML = "";
-
-    data.players.forEach(p => {
-        p.pairs.forEach(pair => {
-            const row = document.createElement("tr");
-            row.className = pair.status;
-
-            row.innerHTML =
-                "<td>Player " + p.player + "</td>" +
-                "<td>" + pair.match + "</td>" +
-                "<td>" + (pair.odd || "-") + "</td>" +
-                "<td>" + pair.status + "</td>";
-
-            table.appendChild(row);
-        });
-    });
+function ticketApp() {
+    return {
+        search: '',
+        loginModal: false,
+        admin_logged_in: {{ 'true' if admin_logged_in else 'false' }},
+        filterTicket(name) {
+            return name.toLowerCase().includes(this.search.toLowerCase());
+        }
+    }
 }
 </script>
 

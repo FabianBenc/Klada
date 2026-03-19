@@ -1,0 +1,92 @@
+/* Global Styles */
+body {
+    font-family: 'Courier New', Courier, monospace;
+    background: #f5f1e8; /* soft beige */
+    color: #3a3a3a;
+    padding: 40px;
+}
+
+h1, h2 {
+    color: #5a4a3c; /* darker beige/brown */
+    font-family: 'Courier New', Courier, monospace;
+    margin-bottom: 20px;
+}
+
+/* Forms and Inputs */
+form {
+    margin-bottom: 20px;
+}
+
+input {
+    padding: 10px;
+    width: 300px;
+    border: 1px solid #d1c7b7;
+    background: #fff8f0;
+    color: #3a3a3a;
+    outline: none;
+    font-family: 'Courier New', monospace;
+}
+
+input:focus {
+    border-color: #a88f72;
+}
+
+button {
+    padding: 10px 14px;
+    background: #e6d8c3;
+    border: 1px solid #d1c7b7;
+    color: #3a3a3a;
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    transition: all 0.2s;
+    margin-right: 10px;
+}
+
+button:hover {
+    background: #d1bfa5;
+}
+
+/* Links */
+a {
+    display: inline-block;
+    text-decoration: none;
+}
+
+/* Table */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff8f0;
+    margin-top: 10px;
+    border: 1px solid #e6d8c3;
+    font-family: 'Courier New', monospace;
+}
+
+th, td {
+    padding: 12px;
+    border-bottom: 1px solid #e6d8c3;
+    text-align: left;
+}
+
+th {
+    background: #f1e6d6;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+tr:hover {
+    background: #f0e6d3;
+}
+
+/* Result Colors */
+.WON {
+    color: #6b8e23; /* muted green */
+}
+
+.LOST {
+    color: #b91c1c; /* soft red */
+}
+
+.OPEN {
+    color: #b59f3b; /* muted gold */
+}
