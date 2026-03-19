@@ -1,13 +1,32 @@
 /* Global Styles */
 body {
     font-family: 'Courier New', Courier, monospace;
-    background: #f5f1e8; /* soft beige */
+    background: #f5f1e8;
     color: #3a3a3a;
     padding: 40px;
 }
 
+/* Header with Logo INLINE */
+.header {
+    display: flex;
+    align-items: center;
+    gap: 8px; /* tight spacing */
+    margin-bottom: 20px;
+}
+
+.header img {
+    height: 80px;
+    display: inline-block;
+}
+
+.header {
+    color: #5a4a3c;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+/* Titles */
 h1, h2 {
-    color: #5a4a3c; /* darker beige/brown */
+    color: #5a4a3c;
     font-family: 'Courier New', Courier, monospace;
     margin-bottom: 20px;
 }
@@ -80,13 +99,13 @@ tr:hover {
 
 /* Result Colors */
 .WON {
-    color: #6b8e23; /* muted green */
+    color: #6b8e23;
 }
 
 .LOST {
-    color: #b91c1c; /* soft red */
+    color: #b91c1c;
 }
 
 .OPEN {
-    color: #b59f3b; /* muted gold */
+    color: #b59f3b;
 }

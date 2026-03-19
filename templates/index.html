@@ -5,6 +5,7 @@
     <title>Betting Tickets</title>
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+
     <style>
         /* Modal styling */
         .modal-bg {
@@ -35,7 +36,11 @@
 </head>
 <body>
 
-<h1>Betting Tickets</h1>
+<!-- Header with Logo INLINE -->
+<h1 class="header">
+    <img src="/static/logo.png" alt="Logo">
+    Betting Tickets
+</h1>
 
 <!-- Admin Login / Logout -->
 <div x-show="!admin_logged_in">
