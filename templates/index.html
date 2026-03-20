@@ -2,7 +2,7 @@
 <html lang="en" x-data="ticketApp()">
 <head>
     <meta charset="UTF-8">
-    <title>Betting Tickets</title>
+    <title>Propali Kladioničari</title>
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 
@@ -39,7 +39,7 @@
 <!-- Header with Logo INLINE -->
 <h1 class="header">
     <img src="/static/logo.png" alt="Logo">
-    Betting Tickets
+    Propali Kladioničari
 </h1>
 
 <!-- Admin Login / Logout -->
@@ -53,16 +53,16 @@
 <!-- Admin Ticket Form -->
 <form method="POST" x-show="admin_logged_in">
     <input type="text" name="ticket_number" placeholder="Enter Ticket Number" required>
-    <button type="submit">Add Ticket</button>
+    <button type="submit">Dodaj Ticket</button>
 </form>
 
-<a href="/update"><button>Update Results</button></a>
-<a href="/leaderboard"><button>Leaderboard</button></a>
+<a href="/update"><button>Ažuriraj Rezultate</button></a>
+<a href="/leaderboard"><button>Poredak</button></a>
 
 <hr>
 
 <!-- Search -->
-<input type="text" x-model="search" placeholder="Search tickets or players..." style="margin-bottom:20px;width:400px;">
+<input type="text" x-model="search" placeholder="Traži Tiket" style="margin-bottom:20px;width:400px;">
 
 <div>
     {% for ticket in tickets %}
@@ -71,15 +71,15 @@
             Ticket: {{ ticket[1] }} 
             <span x-text="open ? '▼' : '▶'"></span>
         </h2>
-        <p>Created: {{ ticket[2] }} | Last updated: {{ ticket[3] }}</p>
+        <p>Kreirano: {{ ticket[2] }} | Ažurirano: {{ ticket[3] }}</p>
 
         <table x-show="open" x-transition>
             <thead>
                 <tr>
-                    <th>Player</th>
-                    <th>Fixture</th>
-                    <th>Odds</th>
-                    <th>Result</th>
+                    <th>Igrač</th>
+                    <th>Par</th>
+                    <th>Tečaj</th>
+                    <th>Rezultat</th>
                 </tr>
             </thead>
             <tbody>
