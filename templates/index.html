@@ -2,114 +2,129 @@
 <html lang="en" x-data="ticketApp()">
 <head>
     <meta charset="UTF-8">
-    <title>Propali Kladioničari</title>
-    <link rel="stylesheet" href="/static/style.css">
-    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <title>Propali Kladionicari</title>
 
-    <style>
-        /* Modal styling */
-        .modal-bg {
-            background: rgba(0,0,0,0.5);
-            position: fixed;
-            inset: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .modal {
-            background: #fff8f0;
-            padding: 20px;
-            border: 1px solid #d1c7b7;
-            font-family: 'Courier New', monospace;
-            width: 300px;
-            border-radius: 8px;
-        }
-        .modal input {
-            width: 100%;
-            margin-bottom: 10px;
-            padding: 8px;
-        }
-        .modal button {
-            width: 100%;
-        }
-    </style>
+    <!-- System.css -->
+    <link rel="stylesheet" href="https://unpkg.com/@sakun/system.css" />
+
+    <!-- Your overrides -->
+    <link rel="stylesheet" href="/static/style.css">
+
+    <!-- Alpine -->
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 </head>
+
 <body>
 
-<!-- Header with Logo INLINE -->
-<h1 class="header">
-    <img src="/static/logo.png" alt="Logo">
-    Propali Kladioničari
-</h1>
-
-<!-- Admin Login / Logout -->
-<div x-show="!admin_logged_in">
-    <button @click="loginModal=true">Admin Login</button>
-</div>
-<div x-show="admin_logged_in">
-    <p>Logged in as admin | <a href="/logout">Logout</a></p>
-</div>
-
-<!-- Admin Ticket Form -->
-<form method="POST" x-show="admin_logged_in">
-    <input type="text" name="ticket_number" placeholder="Enter Ticket Number" required>
-    <button type="submit">Dodaj Ticket</button>
-</form>
-
-<a href="/update"><button>Ažuriraj Rezultate</button></a>
-<a href="/leaderboard"><button>Poredak</button></a>
-
-<hr>
-
-<!-- Search -->
-<input type="text" x-model="search" placeholder="Traži Tiket" style="margin-bottom:20px;width:400px;">
-
-<div>
-    {% for ticket in tickets %}
-    <div x-data="{ open: true }" x-show="filterTicket('{{ ticket[1] }}')" x-transition>
-        <h2 @click="open = !open" style="cursor: pointer;">
-            Ticket: {{ ticket[1] }} 
-            <span x-text="open ? '▼' : '▶'"></span>
-        </h2>
-        <p>Kreirano: {{ ticket[2] }} | Ažurirano: {{ ticket[3] }}</p>
-
-        <table x-show="open" x-transition>
-            <thead>
-                <tr>
-                    <th>Igrač</th>
-                    <th>Par</th>
-                    <th>Tečaj</th>
-                    <th>Rezultat</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for bet in bets %}
-                {% if bet[0] == ticket[0] %}
-                <tr x-show="filterTicket('{{ player_names.get(bet[1], 'Unknown') }}')">
-                    <td>{{ player_names.get(bet[1], "Unknown") }}</td>
-                    <td>{{ bet[2] }}</td>
-                    <td>{{ bet[3] }}</td>
-                    <td class="{{ bet[4] }}">{{ bet[4] }}</td>
-                </tr>
-                {% endif %}
-                {% endfor %}
-            </tbody>
-        </table>
-        <hr>
+<div class="window">
+    <div class="title-bar">
+        <div class="title-bar-text">Propali Kladionicari</div>
     </div>
-    {% endfor %}
+
+    <div class="window-body">
+
+        <!-- Header -->
+        <section class="field-row" style="align-items:center;">
+            <img src="/static/logo.png" style="height:60px;">
+            <h1 style="margin-left:10px;">Propali Kladionicari</h1>
+        </section>
+
+        <!-- Admin Login -->
+        <div x-show="!admin_logged_in">
+            <button @click="loginModal=true">Admin Login</button>
+        </div>
+
+        <div x-show="admin_logged_in">
+            <p>Logged in as admin | <a href="/logout">Logout</a></p>
+        </div>
+
+        <!-- Admin Form -->
+        <form method="POST" x-show="admin_logged_in" class="field-row">
+            <input type="text" name="ticket_number" placeholder="Ticket Number" required>
+            <button type="submit">Dodaj Ticket</button>
+        </form>
+
+        <!-- Navigation -->
+       <section class="field-row">
+            <a href="/update" x-show="admin_logged_in">
+                <button>Azuriraj Rezultate</button>
+            </a>
+
+            <a href="/leaderboard">
+                <button>Poredak</button>
+            </a>
+        </section>
+
+        <hr>
+
+        <!-- Search -->
+        <div class="field-row">
+            <input type="text" x-model="search" placeholder="Traži Tiket" style="width:300px;">
+        </div>
+
+        <!-- Tickets -->
+        {% for ticket in tickets %}
+        <div class="window" x-data="{ open: true }" x-show="filterTicket('{{ ticket[1] }}')">
+
+            <div class="title-bar" @click="open = !open" style="cursor:pointer;">
+                <div class="title-bar-text">
+                    Ticket: {{ ticket[1] }} <span x-text="open ? '▼' : '▶'"></span>
+                </div>
+            </div>
+
+            <div class="window-body" x-show="open">
+                <p><small>Kreirano: {{ ticket[2] }} | Azurirano: {{ ticket[3] }}</small></p>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Igrac</th>
+                            <th>Par</th>
+                            <th>Tecaj</th>
+                            <th>Rezultat</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for bet in bets %}
+                        {% if bet[0] == ticket[0] %}
+                        <tr x-show="filterTicket('{{ player_names.get(bet[1], 'Unknown') }}')">
+                            <td>{{ player_names.get(bet[1], "Unknown") }}</td>
+                            <td>{{ bet[2] }}</td>
+                            <td>{{ bet[3] }}</td>
+                            <td class="{{ bet[4] }}">{{ bet[4] }}</td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+        {% endfor %}
+
+    </div>
 </div>
 
-<!-- Modal Login -->
-<div x-show="loginModal" class="modal-bg" @click.self="loginModal=false">
-    <div class="modal">
-        <h2>Admin Login</h2>
-        <form method="POST" action="/login">
-            <input type="text" name="username" placeholder="Username" required>
-            <input type="password" name="password" placeholder="Password" required>
-            <button type="submit">Login</button>
-        </form>
-        <button @click="loginModal=false" style="margin-top:10px;">Cancel</button>
+<!-- Modal -->
+<div x-show="loginModal" class="modal-overlay">
+    <div class="window modal-window">
+        <div class="title-bar">
+            <div class="title-bar-text">Admin Login</div>
+        </div>
+
+        <div class="window-body">
+            <form method="POST" action="/login">
+                <div class="field-row-stacked">
+                    <input type="text" name="username" placeholder="Username" required>
+                    <input type="password" name="password" placeholder="Password" required>
+                </div>
+
+                <div class="field-row modal-buttons">
+                    <button type="submit">Login</button>
+                    <button type="button" @click="loginModal=false">Cancel</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 

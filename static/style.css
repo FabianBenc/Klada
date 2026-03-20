@@ -1,111 +1,121 @@
-/* Global Styles */
 body {
-    font-family: 'Courier New', Courier, monospace;
-    background: #f5f1e8;
-    color: #3a3a3a;
-    padding: 40px;
+    padding: 20px;
+    background: #008080;
+    font-family: "MS Sans Serif", sans-serif;
 }
 
-/* Header with Logo INLINE */
-.header {
-    display: flex;
-    align-items: center;
-    gap: 8px; /* tight spacing */
+.window {
     margin-bottom: 20px;
 }
 
-.header img {
-    height: 80px;
-    display: inline-block;
+input, textarea, select {
+    background-image: none !important;
+    box-shadow: none !important;
+    color: black !important;
 }
 
-.header {
-    color: #5a4a3c;
-    font-family: 'Courier New', Courier, monospace;
+input[type="text"],
+input[type="password"] {
+    background: #ffffff !important;
+    border: 2px inset #c0c0c0 !important;
+    padding: 4px;
+    font-size: 14px;
+    color: black !important;
+    caret-color: black !important;
 }
 
-/* Titles */
-h1, h2 {
-    color: #5a4a3c;
-    font-family: 'Courier New', Courier, monospace;
-    margin-bottom: 20px;
+input::placeholder {
+    color: #666;
 }
 
-/* Forms and Inputs */
-form {
-    margin-bottom: 20px;
-}
-
-input {
-    padding: 10px;
-    width: 300px;
-    border: 1px solid #d1c7b7;
-    background: #fff8f0;
-    color: #3a3a3a;
-    outline: none;
-    font-family: 'Courier New', monospace;
-}
-
-input:focus {
-    border-color: #a88f72;
+.title-bar-text {
+    background: none !important;
+    text-shadow: none !important;
+    color: white;
+    font-weight: bold;
 }
 
 button {
-    padding: 10px 14px;
-    background: #e6d8c3;
-    border: 1px solid #d1c7b7;
-    color: #3a3a3a;
+    font-family: "MS Sans Serif", sans-serif;
+    font-size: 14px;
+    padding: 4px 12px;
+    border: 2px outset #c0c0c0;
+    background: #e0e0e0;
     cursor: pointer;
-    font-family: 'Courier New', monospace;
-    transition: all 0.2s;
-    margin-right: 10px;
 }
 
 button:hover {
-    background: #d1bfa5;
+    background: #dcdcdc;
 }
 
-/* Links */
-a {
-    display: inline-block;
-    text-decoration: none;
+button:active {
+    border: 2px inset #c0c0c0;
+    background: #d6d6d6;
 }
 
-/* Table */
+button:disabled {
+    color: #808080;
+    text-shadow: 1px 1px #fff;
+}
+
 table {
     width: 100%;
     border-collapse: collapse;
-    background: #fff8f0;
-    margin-top: 10px;
-    border: 1px solid #e6d8c3;
-    font-family: 'Courier New', monospace;
+    background: #ffffff;
+    border: 2px solid #000;
 }
 
 th, td {
-    padding: 12px;
-    border-bottom: 1px solid #e6d8c3;
-    text-align: left;
+    border: 1px solid #000 !important;
+    padding: 6px;
+    background: #ffffff !important;
 }
 
 th {
-    background: #f1e6d6;
-    font-weight: 600;
-    cursor: pointer;
+    background: #c0c0c0 !important;
+    font-weight: bold;
 }
 
-tr:hover {
-    background: #f0e6d3;
-}
-
-/* Result Colors */
 .WON {
-    color: #6b8e23;
+    color: green;
+    font-weight: bold;
 }
 
 .LOST {
-    color: #b91c1c;
+    color: red;
+    font-weight: bold;
 }
 
 .OPEN {
-    color: #b59f3b;
+    color: goldenrod;
+    font-weight: bold;
+}
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-window {
+    width: 300px;
+}
+
+.modal-buttons {
+    justify-content: space-between;
+    margin-top: 10px;
+}
+
+.title-bar {
+    background: linear-gradient(to right, #000080, #1084d0) !important;
+}
+
+.title-bar-text {
+    background: none !important;
+    background-image: none !important;
+    text-shadow: none !important;
+    color: white !important;
 }

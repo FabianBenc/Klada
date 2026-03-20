@@ -1,49 +1,68 @@
 <!DOCTYPE html>
-<html lang="en" x-data>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Tablica zlatnih, srebrnih i brončanih</title>
+    <title>Poredak</title>
+
+    <!-- system.css -->
+    <link rel="stylesheet" href="https://unpkg.com/@sakun/system.css" />
+
+    <!-- your overrides -->
     <link rel="stylesheet" href="/static/style.css">
+
+    <!-- Alpine (optional, safe to keep) -->
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 </head>
+
 <body>
 
-<h1>Poredak</h1>
+<div class="window">
+    <div class="title-bar">
+        <div class="title-bar-text">🏆 Poredak</div>
+    </div>
 
-<table>
-    <thead>
-        <tr>
-            <th>#</th>
-            <th>Igrač</th>
-            <th>Pogođeno ✅</th>
-            <th>Fulano ❌</th>
-            <th>Postotak (%)</th>
-            <th>Prosječni tečaj</th>
-            <th>Najveći pogođeni tečaj</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for player in data %}
-        <tr>
-            <td>
-                {% if loop.index == 1 %} 🥇
-                {% elif loop.index == 2 %} 🥈
-                {% elif loop.index == 3 %} 🥉
-                {% else %} {{ loop.index }} {% endif %}
-            </td>
-            <td>{{ player.name }}</td>
-            <td class="WON">{{ player.guessed }}</td>
-            <td class="LOST">{{ player.missed }}</td>
-            <td>{{ player.win_rate }}</td>
-            <td>{{ player.avg_odds }}</td>
-            <td>{{ player.max_win }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+    <div class="window-body">
 
-<br>
-<a href="/"><button>⬅ Natrag</button></a>
+        <h3>Tablica zlatnih, srebrnih i broncanih</h3>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Igrac</th>
+                    <th>Pogodeno ✅</th>
+                    <th>Fulano ❌</th>
+                    <th>Postotak (%)</th>
+                    <th>Prosjecni tecaj</th>
+                    <th>Najveci pogodeni tecaj</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for player in data %}
+                <tr>
+                    <td>
+                        {% if loop.index == 1 %} 🥇
+                        {% elif loop.index == 2 %} 🥈
+                        {% elif loop.index == 3 %} 🥉
+                        {% else %} {{ loop.index }} {% endif %}
+                    </td>
+                    <td>{{ player.name }}</td>
+                    <td class="WON">{{ player.guessed }}</td>
+                    <td class="LOST">{{ player.missed }}</td>
+                    <td>{{ player.win_rate }}</td>
+                    <td>{{ player.avg_odds }}</td>
+                    <td>{{ player.max_win }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <br>
+
+        <a href="/"><button>⬅ Natrag</button></a>
+
+    </div>
+</div>
 
 </body>
 </html>

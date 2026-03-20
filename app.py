@@ -263,10 +263,11 @@ def leaderboard():
     return render_template("leaderboard.html", data=leaderboard_data)
 
 
-@app.route("/update")
+@app.route('/update')
 def update():
-    update_ticket_results()
-    return redirect("/")
+    if not session.get('admin_logged_in'):
+        return redirect('/')
+    return render_template('update.html')
 
 
 if __name__ == "__main__":
