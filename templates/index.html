@@ -39,7 +39,7 @@
         </form>
 
         <!-- Navigation -->
-       <section class="field-row">
+        <section class="field-row">
             <a href="/update" x-show="admin_logged_in">
                 <button>Azuriraj Rezultate</button>
             </a>
@@ -60,10 +60,22 @@
         {% for ticket in tickets %}
         <div class="window" x-data="{ open: true }" x-show="filterTicket('{{ ticket[1] }}')">
 
-            <div class="title-bar" @click="open = !open" style="cursor:pointer;">
-                <div class="title-bar-text">
+            <div class="title-bar" style="display:flex; justify-content:space-between; align-items:center;">
+                
+                <!-- Click to open/close -->
+                <div class="title-bar-text" @click="open = !open" style="cursor:pointer;">
                     Ticket: {{ ticket[1] }} <span x-text="open ? '▼' : '▶'"></span>
                 </div>
+
+                <!-- Delete button (admin only) -->
+                {% if admin_logged_in %}
+                <form method="POST" action="/delete_ticket/{{ ticket[0] }}"
+                      onsubmit="return confirm('Are you sure you want to delete this ticket?');"
+                      style="margin:0;">
+                    <button type="submit" style="background:red; color:white; padding:2px 8px;">X</button>
+                </form>
+                {% endif %}
+
             </div>
 
             <div class="window-body" x-show="open">

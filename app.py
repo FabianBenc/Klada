@@ -269,6 +269,22 @@ def update():
         return redirect('/')
     return render_template('update.html')
 
+@app.route("/delete_ticket/<ticket_id>", methods=["POST"])
+def delete_ticket(ticket_id):
+    if not session.get("admin_logged_in"):
+        return "Unauthorized", 403
+
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    c.execute("DELETE FROM bets WHERE ticket_id=?", (ticket_id,))
+    c.execute("DELETE FROM tickets WHERE ticket_id=?", (ticket_id,))
+
+    conn.commit()
+    conn.close()
+
+    return redirect("/")
+
 
 if __name__ == "__main__":
     init_db()
