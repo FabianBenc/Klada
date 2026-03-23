@@ -1,28 +1,20 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="hr">
 <head>
     <meta charset="UTF-8">
     <title>Poredak</title>
 
-    <!-- system.css -->
-    <link rel="stylesheet" href="https://unpkg.com/@sakun/system.css" />
-
-    <!-- your overrides -->
+    <link rel="stylesheet" href="https://unpkg.com/@sakun/system.css">
     <link rel="stylesheet" href="/static/style.css">
-
-    <!-- Alpine (optional, safe to keep) -->
-    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 </head>
 
 <body>
-
 <div class="window">
     <div class="title-bar">
         <div class="title-bar-text">🏆 Poredak</div>
     </div>
 
     <div class="window-body">
-
         <h3>Tablica zlatnih, srebrnih i broncanih</h3>
 
         <table>
@@ -41,10 +33,11 @@
                 {% for player in data %}
                 <tr>
                     <td>
-                        {% if loop.index == 1 %} 🥇
-                        {% elif loop.index == 2 %} 🥈
-                        {% elif loop.index == 3 %} 🥉
-                        {% else %} {{ loop.index }} {% endif %}
+                        {% if loop.index == 1 %}🥇
+                        {% elif loop.index == 2 %}🥈
+                        {% elif loop.index == 3 %}🥉
+                        {% else %}{{ loop.index }}
+                        {% endif %}
                     </td>
                     <td>{{ player.name }}</td>
                     <td class="WON">{{ player.guessed }}</td>
@@ -57,12 +50,10 @@
             </tbody>
         </table>
 
-        <br>
-
-        <a href="/"><button>⬅ Natrag</button></a>
-
+        <a href="/">
+            <button>⬅ Natrag</button>
+        </a>
     </div>
 </div>
-
 </body>
 </html>
