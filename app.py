@@ -5,9 +5,10 @@ from datetime import datetime
 import threading
 import time
 import os
+from urllib.parse import urlparse, parse_qs
 
 app = Flask(__name__)
-app.secret_key = "supersecretkey"  # Change to a strong secret in production
+app.secret_key = "supersecretkey"  # Change in production
 
 API_URL = "https://api.psk.hr/betslip-history/v2/detail"
 DB_NAME = "database.db"
@@ -23,7 +24,6 @@ PLAYER_NAMES = {
 
 ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "password123"
-
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -53,12 +53,32 @@ def init_db():
     conn.commit()
     conn.close()
 
+def extract_ticket_id(input_value):
+    """
+    Accepts either:
+    - full PSK URL
+    - raw ticket ID
+    """
+    try:
+        parsed = urlparse(input_value)
+        query = parse_qs(parsed.query)
 
-def fetch_data(ticket_number):
+        if "id" in query:
+            return query["id"][0]
+
+        return input_value
+    except:
+        return input_value
+
+
+def fetch_data(ticket_input):
+    ticket_id = extract_ticket_id(ticket_input)
+
     params = {
-        "id": ticket_number,
+        "id": ticket_id,
         "source": "SB"
     }
+
     try:
         res = requests.get(API_URL, params=params)
         res.raise_for_status()
@@ -66,7 +86,6 @@ def fetch_data(ticket_number):
     except Exception as e:
         print("API error:", e)
         return None
-
 
 def save_ticket(ticket_number, data):
     if not data:
@@ -119,7 +138,6 @@ def save_ticket(ticket_number, data):
     conn.commit()
     conn.close()
 
-
 def update_ticket_results():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -158,19 +176,20 @@ def update_ticket_results():
 def auto_update():
     while True:
         update_ticket_results()
-        time.sleep(86400)  # Update once per day
-
+        time.sleep(86400)  # once per day
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
+
         if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
             session["admin_logged_in"] = True
             return redirect("/")
         else:
             return render_template("login.html", error="Invalid credentials")
+
     return render_template("login.html", error=None)
 
 
@@ -179,16 +198,17 @@ def logout():
     session.pop("admin_logged_in", None)
     return redirect("/")
 
-
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
         if not session.get("admin_logged_in"):
             return "Unauthorized", 403
 
-        ticket_number = request.form.get("ticket_number")
+        ticket_number = request.form.get("ticket_number").strip()
+
         data = fetch_data(ticket_number)
         save_ticket(ticket_number, data)
+
         return redirect("/")
 
     conn = sqlite3.connect(DB_NAME)
@@ -217,7 +237,6 @@ def index():
         player_names=PLAYER_NAMES,
         admin_logged_in=session.get("admin_logged_in")
     )
-
 
 @app.route("/leaderboard")
 def leaderboard():
@@ -262,12 +281,12 @@ def leaderboard():
 
     return render_template("leaderboard.html", data=leaderboard_data)
 
-
 @app.route('/update')
 def update():
     if not session.get('admin_logged_in'):
         return redirect('/')
     return render_template('update.html')
+
 
 @app.route("/delete_ticket/<ticket_id>", methods=["POST"])
 def delete_ticket(ticket_id):
@@ -285,9 +304,10 @@ def delete_ticket(ticket_id):
 
     return redirect("/")
 
-
 if __name__ == "__main__":
     init_db()
+
     if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
         threading.Thread(target=auto_update, daemon=True).start()
+
     app.run(debug=True)
