@@ -249,7 +249,7 @@ def leaderboard():
         c.execute("SELECT COUNT(*) FROM bets WHERE player=?", (player_id,))
         total = c.fetchone()[0]
 
-        c.execute("SELECT COUNT(*) FROM bets WHERE player=? AND result='WINNING'", (player_id,))
+        c.execute("SELECT COUNT(*) FROM bets WHERE player=? AND (result='WINNING' OR result='VOIDED')", (player_id,))
         guessed = c.fetchone()[0]
 
         c.execute("SELECT COUNT(*) FROM bets WHERE player=? AND result='LOSING'", (player_id,))
@@ -258,7 +258,7 @@ def leaderboard():
         c.execute("SELECT AVG(odds) FROM bets WHERE player=?", (player_id,))
         avg_odds = c.fetchone()[0]
 
-        c.execute("SELECT MAX(odds) FROM bets WHERE player=? AND result='WINNING'", (player_id,))
+        c.execute("SELECT MAX(odds) FROM bets WHERE player=? AND (result='WINNING' OR result='VOIDED')", (player_id,))
         max_win = c.fetchone()[0]
 
         win_rate = (guessed / total * 100) if total > 0 else 0
