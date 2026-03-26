@@ -22,7 +22,7 @@ PLAYER_NAMES = {
 }
 
 ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "password123"  # Change to a secure password
+ADMIN_PASSWORD = "password123"
 
 
 def init_db():
