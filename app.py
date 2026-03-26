@@ -14,12 +14,12 @@ API_URL = "https://api.psk.hr/betslip-history/v2/detail"
 DB_NAME = "database.db"
 
 PLAYER_NAMES = {
-    1: "Alen Bobicanec",
-    2: "Andreas Balaic",
-    3: "Fabian Benc",
-    4: "Kristijan Novak",
-    5: "Lovro Posavec",
-    6: "Zlatko Broz"
+    1: "Jegulja",
+    2: "Alexandar",
+    3: "Mama",
+    4: "Kiki",
+    5: "Livro",
+    6: "Broncani"
 }
 
 ADMIN_USERNAME = "admin"
