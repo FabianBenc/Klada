@@ -50,6 +50,13 @@ def init_db():
         )
     """)
 
+
+    c.execute("PRAGMA table_info(tickets)")
+    columns = [row[1] for row in c.fetchall()]
+
+    if "ticket_jwt" not in columns:
+        c.execute("ALTER TABLE tickets ADD COLUMN ticket_jwt TEXT")
+
     conn.commit()
     conn.close()
 
@@ -71,8 +78,8 @@ def extract_ticket_id(input_value):
         return input_value
 
 
-def fetch_data(ticket_input):
-    ticket_id = extract_ticket_id(ticket_input)
+def fetch_data(ticket_id):
+    
 
     params = {
         "id": ticket_id,
@@ -105,9 +112,9 @@ def save_ticket(ticket_number, data):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     c.execute("""
-        INSERT INTO tickets (ticket_id, ticket_number, created_at, last_updated)
-        VALUES (?, ?, ?, ?)
-    """, (ticket_id, number, now, now))
+        INSERT INTO tickets (ticket_id, ticket_number, created_at, last_updated, ticket_jwt)
+        VALUES (?, ?, ?, ?, ?)
+    """, (ticket_id, number, now, now, ticket_number))
 
     legs = data.get("legs", [])
     total_legs = len(legs)
@@ -143,7 +150,7 @@ def update_ticket_results():
     c = conn.cursor()
 
     c.execute("""
-        SELECT DISTINCT t.ticket_id
+        SELECT DISTINCT t.ticket_id, t.ticket_jwt
         FROM tickets t
         JOIN bets b ON t.ticket_id = b.ticket_id
         WHERE b.result IS NULL OR b.result = 'PENDING' OR b.result = 'UNKNOWN'
@@ -151,9 +158,8 @@ def update_ticket_results():
         LIMIT 2
     """)
     tickets = c.fetchall()
-
-    for (ticket_id,) in tickets:
-        data = fetch_data(ticket_id)
+    for (ticket_id, ticket_jwt,) in tickets:
+        data = fetch_data(ticket_jwt)
         if not data:
             continue
 
@@ -205,9 +211,11 @@ def index():
             return "Unauthorized", 403
 
         ticket_number = request.form.get("ticket_number").strip()
+        ticket_id = extract_ticket_id(ticket_number)
+        print (ticket_id)
 
-        data = fetch_data(ticket_number)
-        save_ticket(ticket_number, data)
+        data = fetch_data(ticket_id)
+        save_ticket(ticket_id, data)
 
         return redirect("/")
 
@@ -285,7 +293,9 @@ def leaderboard():
 def update():
     if not session.get('admin_logged_in'):
         return redirect('/')
-    return render_template('update.html')
+    else:
+        update_ticket_results()
+        return redirect("/")
 
 
 @app.route("/delete_ticket/<ticket_id>", methods=["POST"])
