@@ -19,7 +19,17 @@ PLAYER_NAMES = {
     3: "Mama",
     4: "Kiki",
     5: "Livro",
-    6: "Joza."
+    6: "Joza.",
+}
+
+TICKET_NAMES = {
+    #Ako neko vec nabo igrav samo tu ga zbrisem
+    1: "Jegulja",
+    2: "Alexandar",
+    3: "Mama",
+    4: "Kiki",
+    5: "Livro",
+    6: "Joza.",
 }
 
 ADMIN_USERNAME = "admin"
@@ -119,17 +129,17 @@ def save_ticket(ticket_number, data):
     legs = data.get("legs", [])
     total_legs = len(legs)
 
-    if total_legs == len(PLAYER_NAMES):
+    if total_legs == len(TICKET_NAMES):
         legs_per_player = 1
-    elif total_legs == (len(PLAYER_NAMES) * 2):
+    elif total_legs == (len(TICKET_NAMES) * 2):
         legs_per_player = 2
     else:
-        legs_per_player = max(1, total_legs // len(PLAYER_NAMES))
+        legs_per_player = max(1, total_legs // len(TICKET_NAMES))
 
     for index, leg in enumerate(legs):
         player = (index // legs_per_player) + 1
-        if player > len(PLAYER_NAMES):
-            player = len(PLAYER_NAMES)
+        if player > len(TICKET_NAMES):
+            player = len(TICKET_NAMES)
 
         c.execute("""
             INSERT INTO bets (ticket_id, player, fixture_name, odds, result)
