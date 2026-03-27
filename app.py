@@ -19,7 +19,7 @@ PLAYER_NAMES = {
     3: "Mama",
     4: "Kiki",
     5: "Livro",
-    6: "Broncani"
+    6: "Joza."
 }
 
 ADMIN_USERNAME = "admin"
