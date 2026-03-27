@@ -119,9 +119,9 @@ def save_ticket(ticket_number, data):
     legs = data.get("legs", [])
     total_legs = len(legs)
 
-    if total_legs == 6:
+    if total_legs == len(PLAYER_NAMES):
         legs_per_player = 1
-    elif total_legs == 12:
+    elif total_legs == (len(PLAYER_NAMES) * 2):
         legs_per_player = 2
     else:
         legs_per_player = max(1, total_legs // len(PLAYER_NAMES))
