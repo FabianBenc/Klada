@@ -67,6 +67,17 @@ def init_db():
     if "ticket_jwt" not in columns:
         c.execute("ALTER TABLE tickets ADD COLUMN ticket_jwt TEXT")
 
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS loss_streaks (
+            player INTEGER PRIMARY KEY,
+            streak INTEGER DEFAULT 0
+        )
+    """)
+
+    # Ensure every player has a row
+    for player_id in PLAYER_NAMES:
+        c.execute("INSERT OR IGNORE INTO loss_streaks (player, streak) VALUES (?, 0)", (player_id,))
+
     conn.commit()
     conn.close()
 
@@ -153,7 +164,66 @@ def save_ticket(ticket_number, data):
         ))
 
     conn.commit()
+    update_loss_streaks(ticket_id, conn)
     conn.close()
+
+def update_loss_streaks(ticket_id, conn=None):
+    """
+    After a ticket's bets are saved/updated, recalculate loss streaks.
+    A player's streak increases by 1 if ALL their legs on this ticket are LOSING.
+    If their streak was already 3 (max), it resets to 0 before the new bet counts
+    (the 4th bet resets the streak). A win/voided result resets the streak to 0.
+    """
+    close_conn = conn is None
+    if close_conn:
+        conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    # Get all players who have bets on this ticket
+    c.execute("SELECT DISTINCT player FROM bets WHERE ticket_id=?", (ticket_id,))
+    players = [row[0] for row in c.fetchall()]
+
+    for player in players:
+        c.execute("SELECT result FROM bets WHERE ticket_id=? AND player=?", (ticket_id, player))
+        results = [row[0] for row in c.fetchall()]
+
+        # Only update streak if all results are resolved (not NULL/PENDING/UNKNOWN)
+        if not results or any(r in (None, "PENDING", "UNKNOWN") for r in results):
+            continue
+
+        all_losing = all(r == "LOSING" for r in results)
+
+        c.execute("SELECT streak FROM loss_streaks WHERE player=?", (player,))
+        row = c.fetchone()
+        current_streak = row[0] if row else 0
+
+        if all_losing:
+            # If streak was at max (3), this 4th bet resets it to 1 (fresh streak starting)
+            if current_streak >= 3:
+                new_streak = 1
+            else:
+                new_streak = current_streak + 1
+        else:
+            # Win or voided — reset streak
+            new_streak = 0
+
+        c.execute("INSERT OR REPLACE INTO loss_streaks (player, streak) VALUES (?, ?)", (player, new_streak))
+
+    if close_conn:
+        conn.commit()
+        conn.close()
+    else:
+        conn.commit()
+
+
+def get_loss_streaks():
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT player, streak FROM loss_streaks")
+    streaks = {row[0]: row[1] for row in c.fetchall()}
+    conn.close()
+    return streaks
+
 
 def update_ticket_results():
     conn = sqlite3.connect(DB_NAME)
@@ -184,6 +254,9 @@ def update_ticket_results():
             UPDATE tickets SET last_updated=?
             WHERE ticket_id=?
         """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ticket_id))
+
+        conn.commit()
+        update_loss_streaks(ticket_id, conn)
 
     conn.commit()
     conn.close()
@@ -253,7 +326,8 @@ def index():
         tickets=tickets,
         bets=bets,
         player_names=PLAYER_NAMES,
-        admin_logged_in=session.get("admin_logged_in")
+        admin_logged_in=session.get("admin_logged_in"),
+        loss_streaks=get_loss_streaks()
     )
 
 @app.route("/leaderboard")
@@ -308,6 +382,52 @@ def update():
         return redirect("/")
 
 
+def recalculate_all_streaks():
+    """
+    Fully recalculates loss streaks for all players from scratch,
+    replaying tickets in chronological order. Used after a ticket is deleted.
+    """
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    # Reset all streaks
+    for player_id in PLAYER_NAMES:
+        c.execute("INSERT OR REPLACE INTO loss_streaks (player, streak) VALUES (?, 0)", (player_id,))
+
+    # Replay tickets oldest-first
+    c.execute("SELECT ticket_id FROM tickets ORDER BY id ASC")
+    ticket_ids = [row[0] for row in c.fetchall()]
+
+    streaks = {player_id: 0 for player_id in PLAYER_NAMES}
+
+    for ticket_id in ticket_ids:
+        c.execute("SELECT DISTINCT player FROM bets WHERE ticket_id=?", (ticket_id,))
+        players = [row[0] for row in c.fetchall()]
+
+        for player in players:
+            c.execute("SELECT result FROM bets WHERE ticket_id=? AND player=?", (ticket_id, player))
+            results = [row[0] for row in c.fetchall()]
+
+            if not results or any(r in (None, "PENDING", "UNKNOWN") for r in results):
+                continue
+
+            all_losing = all(r == "LOSING" for r in results)
+
+            if all_losing:
+                if streaks[player] >= 3:
+                    streaks[player] = 1
+                else:
+                    streaks[player] += 1
+            else:
+                streaks[player] = 0
+
+    for player_id, streak in streaks.items():
+        c.execute("INSERT OR REPLACE INTO loss_streaks (player, streak) VALUES (?, ?)", (player_id, streak))
+
+    conn.commit()
+    conn.close()
+
+
 @app.route("/delete_ticket/<ticket_id>", methods=["POST"])
 def delete_ticket(ticket_id):
     if not session.get("admin_logged_in"):
@@ -321,6 +441,8 @@ def delete_ticket(ticket_id):
 
     conn.commit()
     conn.close()
+
+    recalculate_all_streaks()
 
     return redirect("/")
 

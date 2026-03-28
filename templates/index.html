@@ -52,6 +52,33 @@
 
         <hr>
 
+        <!-- Loss Streaks -->
+        <div class="window" style="margin-bottom: 8px;">
+            <div class="title-bar">
+                <div class="title-bar-text">🔥 Serije Poraza</div>
+            </div>
+            <div class="window-body" style="display:flex; flex-wrap:wrap; gap:12px; padding:8px;">
+                {% for player_id, name in player_names.items() %}
+                {% set streak = loss_streaks.get(player_id, 0) %}
+                <div style="display:flex; flex-direction:column; align-items:center; min-width:80px;">
+                    <strong style="font-size:0.85em;">{{ name }}</strong>
+                    <div style="display:flex; gap:3px; margin-top:4px;">
+                        {% for i in range(1, 4) %}
+                            {% if i <= streak %}
+                                <span title="Poraz {{ i }}" style="font-size:1.3em;">💀</span>
+                            {% else %}
+                                <span title="Slobodno {{ i }}" style="font-size:1.3em; opacity:0.2;">💀</span>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    <small style="margin-top:2px; color: {% if streak == 3 %}red{% elif streak == 2 %}orange{% elif streak == 1 %}goldenrod{% else %}gray{% endif %};">
+                        {% if streak == 0 %}Dobar{% elif streak == 3 %}KAZNA!{% else %}{{ streak }}/3{% endif %}
+                    </small>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
         <!-- Search -->
         <div class="field-row">
             <input type="text" x-model="search" placeholder="Traži Tiket" style="width:300px;">
@@ -94,8 +121,12 @@
                     <tbody>
                         {% for bet in bets %}
                         {% if bet[0] == ticket[0] %}
+                        {% set streak = loss_streaks.get(bet[1], 0) %}
                         <tr x-show="filterTicket('{{ player_names.get(bet[1], 'Unknown') }}')">
-                            <td>{{ player_names.get(bet[1], "Unknown") }}</td>
+                            <td>
+                                {{ player_names.get(bet[1], "Unknown") }}
+                                {% if streak == 3 %}<span title="Serija od 3 poraza!"> ☠️</span>{% elif streak >= 1 %}<span title="Serija: {{ streak }}/3"> 🔥</span>{% endif %}
+                            </td>
                             <td>{{ bet[2] }}</td>
                             <td>{{ bet[3] }}</td>
                             <td class="{{ bet[4] }}">{{ bet[4] }}</td>
