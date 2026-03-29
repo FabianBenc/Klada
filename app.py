@@ -256,10 +256,10 @@ def update_ticket_results():
         """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ticket_id))
 
         conn.commit()
-        update_loss_streaks(ticket_id, conn)
 
     conn.commit()
     conn.close()
+    recalculate_all_streaks()
 
 
 def auto_update():
