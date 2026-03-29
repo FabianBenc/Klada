@@ -295,7 +295,6 @@ def index():
 
         ticket_number = request.form.get("ticket_number").strip()
         ticket_id = extract_ticket_id(ticket_number)
-        print (ticket_id)
 
         data = fetch_data(ticket_id)
         save_ticket(ticket_id, data)
