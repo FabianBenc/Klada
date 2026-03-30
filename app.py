@@ -295,6 +295,7 @@ def index():
 
         ticket_number = request.form.get("ticket_number").strip()
         ticket_id = extract_ticket_id(ticket_number)
+        print (ticket_id)
 
         data = fetch_data(ticket_id)
         save_ticket(ticket_id, data)
@@ -328,6 +329,11 @@ def index():
         admin_logged_in=session.get("admin_logged_in"),
         loss_streaks=get_loss_streaks()
     )
+
+@app.route("/pravila")
+def pravila():
+    return render_template("pravilaigre.html")
+
 
 @app.route("/leaderboard")
 def leaderboard():

@@ -8,12 +8,56 @@ body {
     margin-bottom: 20px;
 }
 
-input, textarea, select {
-    background-image: none !important;
-    box-shadow: none !important;
-    color: black !important;
+/* WIN98 MENU BAR */
+.menu-bar {
+    background: #c0c0c0;
+    border-bottom: 2px solid #808080;
+    padding: 2px 6px;
+    display: flex;
+    gap: 10px;
+    position: relative;
 }
 
+.menu-item {
+    position: relative;
+    padding: 2px 6px;
+    cursor: pointer;
+}
+
+.menu-item:hover {
+    background: #000080;
+    color: white;
+}
+
+.dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: #c0c0c0;
+    border: 2px outset #fff;
+    min-width: 160px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+}
+
+.dropdown a {
+    padding: 4px 10px;
+    text-decoration: none;
+    color: black;
+}
+
+.dropdown a:hover {
+    background: #000080;
+    color: white;
+}
+
+.dropdown hr {
+    margin: 2px 0;
+    border: 1px solid #808080;
+}
+
+/* Inputs */
 input[type="text"],
 input[type="password"] {
     background: #ffffff !important;
@@ -21,20 +65,9 @@ input[type="password"] {
     padding: 4px;
     font-size: 14px;
     color: black !important;
-    caret-color: black !important;
 }
 
-input::placeholder {
-    color: #666;
-}
-
-.title-bar-text {
-    background: none !important;
-    text-shadow: none !important;
-    color: white;
-    font-weight: bold;
-}
-
+/* Buttons */
 button {
     font-family: "MS Sans Serif", sans-serif;
     font-size: 14px;
@@ -53,11 +86,7 @@ button:active {
     background: #d6d6d6;
 }
 
-button:disabled {
-    color: #808080;
-    text-shadow: 1px 1px #fff;
-}
-
+/* Table */
 table {
     width: 100%;
     border-collapse: collapse;
@@ -68,7 +97,6 @@ table {
 th, td {
     border: 1px solid #000 !important;
     padding: 6px;
-    background: #ffffff !important;
 }
 
 th {
@@ -76,21 +104,11 @@ th {
     font-weight: bold;
 }
 
-.WON {
-    color: green;
-    font-weight: bold;
-}
+.WON { color: green; font-weight: bold; }
+.LOST { color: red; font-weight: bold; }
+.OPEN { color: goldenrod; font-weight: bold; }
 
-.LOST {
-    color: red;
-    font-weight: bold;
-}
-
-.OPEN {
-    color: goldenrod;
-    font-weight: bold;
-}
-
+/* Modal */
 .modal-overlay {
     position: fixed;
     inset: 0;
@@ -109,13 +127,12 @@ th {
     margin-top: 10px;
 }
 
+/* Title bar */
 .title-bar {
     background: linear-gradient(to right, #000080, #1084d0) !important;
 }
 
 .title-bar-text {
-    background: none !important;
-    background-image: none !important;
-    text-shadow: none !important;
     color: white !important;
+    font-weight: bold;
 }

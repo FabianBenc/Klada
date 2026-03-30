@@ -3,7 +3,7 @@
 <head>
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='icon.png') }}">
     <meta charset="UTF-8">
-    <title>Poredak</title>
+    <title>Poredak – Propali Kladionicari</title>
 
     <link rel="stylesheet" href="https://unpkg.com/@sakun/system.css">
     <link rel="stylesheet" href="/static/style.css">
@@ -13,6 +13,18 @@
 <div class="window">
     <div class="title-bar">
         <div class="title-bar-text">🏆 Poredak</div>
+    </div>
+
+    <!-- Win98 Menu Bar -->
+    <div class="menu-bar">
+        <div class="menu-item" onclick="this.querySelector('.dropdown').style.display = this.querySelector('.dropdown').style.display === 'flex' ? 'none' : 'flex'">
+            Navigacija
+            <div class="dropdown" style="display:none;">
+                <a href="/">⬅ Natrag na početnu</a>
+                <a href="/pravila">📜 Pravila igre</a>
+                <a href="/login">🔑 Admin prijava</a>
+            </div>
+        </div>
     </div>
 
     <div class="window-body">
@@ -50,11 +62,16 @@
                 {% endfor %}
             </tbody>
         </table>
-
-        <a href="/">
-            <button>⬅ Natrag</button>
-        </a>
     </div>
 </div>
+
+<script>
+    document.addEventListener('click', function(e) {
+        document.querySelectorAll('.dropdown').forEach(d => {
+            if (!d.parentElement.contains(e.target)) d.style.display = 'none';
+        });
+    });
+</script>
+
 </body>
 </html>

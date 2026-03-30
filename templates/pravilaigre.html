@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='icon.png') }}">
+    <meta charset="UTF-8">
+    <title>Pravila Igre – Propali Kladionicari</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/@sakun/system.css">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+<div class="window">
+    <div class="title-bar">
+        <div class="title-bar-text">📜 Pravila Igre – Ugovor o Grupnom Sportskom Klađenju</div>
+    </div>
+
+    <!-- Win98 Menu Bar -->
+    <div class="menu-bar">
+        <div class="menu-item" onclick="this.querySelector('.dropdown').style.display = this.querySelector('.dropdown').style.display === 'flex' ? 'none' : 'flex'">
+            Navigacija
+            <div class="dropdown" style="display:none;">
+                <a href="/">⬅ Natrag na početnu</a>
+                <a href="/leaderboard">🏆 Poredak</a>
+                <a href="/login">🔑 Admin prijava</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="window-body">
+        <p style="margin-top:0;"><em>Ovaj ugovor definira pravila zajedničkog sportskog klađenja između sudionika.</em></p>
+
+        <hr>
+
+        <!-- Članak 1 -->
+        <div class="window" style="margin-bottom:12px;">
+            <div class="title-bar"><div class="title-bar-text">Članak 1. – Sudionici</div></div>
+            <div class="window-body">
+                <p>Sudionici ugovora su svi korisnici koji sudjeluju u grupnom sportskom klađenju i prihvaćaju ova pravila.</p>
+            </div>
+        </div>
+
+        <!-- Članak 2 -->
+        <div class="window" style="margin-bottom:12px;">
+            <div class="title-bar"><div class="title-bar-text">Članak 2. – Način igranja</div></div>
+            <div class="window-body">
+                <ol>
+                    <li>Svaki korisnik sudjeluje s <strong>2 para</strong>, pri čemu minimalni tečaj svakog para mora iznositi <strong>1,50</strong>.</li>
+                    <li>Korisnik koji prvi pošalje svoje parove sastavljaču tiketa time rezervira te parove kao svoje.</li>
+                    <li>Tiket se igra kao <strong>sistemski tiket</strong>, uz 2 ili više mogućih promašaja, ovisno o ukupnom tečaju.</li>
+                    <li>Tiket se igra u <strong>PSK</strong>. Razlog zašto je odabrana ta kladionica je olakšano dijeljenje tiketa svim sudionicima.</li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- Članak 3 -->
+        <div class="window" style="margin-bottom:12px;">
+            <div class="title-bar"><div class="title-bar-text">Članak 3. – Ulog</div></div>
+            <div class="window-body">
+                <ol>
+                    <li>Svaki korisnik daje <strong>1 euro</strong> uloga po tiketu.</li>
+                    <li>Ukupan ulog jednak je <strong>broju korisnika × 1 euro</strong>.</li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- Članak 4 -->
+        <div class="window" style="margin-bottom:12px;">
+            <div class="title-bar"><div class="title-bar-text">Članak 4. – Promašaji i pokrivanje sljedećeg tiketa</div></div>
+            <div class="window-body">
+                <ol>
+                    <li>Korisnik koji promaši jedan ili oba svoja para smatra se <strong>gubitnikom</strong> tog tiketa.</li>
+                    <li>Gubitnici financiraju sljedeći tiket:
+                        <table style="margin-top:8px; width:auto;">
+                            <thead>
+                                <tr>
+                                    <th>Broj gubitnika</th>
+                                    <th>Tko plaća</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>1 korisnik promaši</td>
+                                    <td>Plaća puni tiket</td>
+                                </tr>
+                                <tr>
+                                    <td>2 korisnika promaše</td>
+                                    <td>Dijele iznos jednako</td>
+                                </tr>
+                                <tr>
+                                    <td>Više korisnika promaši</td>
+                                    <td>Iznos se dijeli jednako</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- Članak 5 -->
+        <div class="window" style="margin-bottom:12px;">
+            <div class="title-bar"><div class="title-bar-text">Članak 5. – Vrijeme igranja</div></div>
+            <div class="window-body">
+                <p>Tiket se igra tijekom <strong>radnog tjedna</strong> ako se ima što za igrati i <strong>vikendom</strong>.</p>
+            </div>
+        </div>
+
+        <!-- Članak 6 -->
+        <div class="window" style="margin-bottom:12px;">
+            <div class="title-bar"><div class="title-bar-text">Članak 6. – Prestanak sudjelovanja</div></div>
+            <div class="window-body">
+                <p>Korisnik koji želi prestati sudjelovati mora prije izlaska <strong>podmiriti sve postojeće dugove</strong>.</p>
+            </div>
+        </div>
+
+        <!-- Članak 7 -->
+        <div class="window" style="margin-bottom:12px;">
+            <div class="title-bar"><div class="title-bar-text">Članak 7. – Dobitak</div></div>
+            <div class="window-body">
+                <ol>
+                    <li>Dobitak se dijeli jednako među svim korisnicima samo ako je veći od <strong>(broj korisnika × 100)</strong>.</li>
+                    <li>Ako je dobitak manji od navedenog iznosa, ostaje na računu kladionice ili se korisnici drugačije dogovore.</li>
+                    <li>Ako je tiket dobitan, ali su pojedini korisnici promašili svoje parove, oni su i dalje obvezni platiti sljedeći tiket sukladno Članku 4.</li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- Članak 8 -->
+        <div class="window" style="margin-bottom:12px;">
+            <div class="title-bar"><div class="title-bar-text">Članak 8. – Prevelik broj promašaja</div></div>
+            <div class="window-body">
+                <p>U slučaju prevelikog broja promašenih tiketa, prema dogovoru sudionika, broj parova po korisniku može se smanjiti s <strong>2 na 1</strong>.</p>
+            </div>
+        </div>
+
+        <!-- Članak 9 -->
+        <div class="window" style="margin-bottom:12px;">
+            <div class="title-bar"><div class="title-bar-text">Članak 9. – Kaznene odredbe ⚠️</div></div>
+            <div class="window-body">
+                <p>Ako korisnik promaši oba para <strong>3 tiketa zaredom</strong>, dužan je <strong>sam platiti puni tiket</strong> u 4. tjednu igre.</p>
+            </div>
+        </div>
+
+        <!-- Članak 10 -->
+        <div class="window" style="margin-bottom:12px;">
+            <div class="title-bar"><div class="title-bar-text">Članak 10. – Evidentiranje igre</div></div>
+            <div class="window-body">
+                <p>Igranje tiketa i dugovanja će se evidentirati u tablici.</p>
+            </div>
+        </div>
+
+        <!-- Članak 11 -->
+        <div class="window" style="margin-bottom:12px;">
+            <div class="title-bar"><div class="title-bar-text">Članak 11. – Završne odredbe</div></div>
+            <div class="window-body">
+                <p>Sudjelovanjem u igri smatra se da su svi korisnici u cijelosti prihvatili ovaj ugovor.</p>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    document.addEventListener('click', function(e) {
+        document.querySelectorAll('.dropdown').forEach(d => {
+            if (!d.parentElement.contains(e.target)) d.style.display = 'none';
+        });
+    });
+</script>
+
+</body>
+</html>

@@ -13,6 +13,18 @@
 
     <!-- Alpine -->
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+
+    <!-- Skull animation -->
+    <style>
+        .skull {
+            display: inline-block;
+            transition: transform 0.3s ease;
+        }
+
+        .skull:hover {
+            transform: rotate(360deg) scale(1.2);
+        }
+    </style>
 </head>
 
 <body>
@@ -22,35 +34,45 @@
         <div class="title-bar-text">Propali Kladionicari</div>
     </div>
 
+    <!-- Win98 Menu Bar -->
+    <div class="menu-bar" @click.outside="openMenu = null" x-data="{ openMenu: null }">
+
+        <!-- Tiketi menu -->
+        <div class="menu-item" @click="openMenu = openMenu === 'tiketi' ? null : 'tiketi'">
+            Tiketi
+            <div class="dropdown" x-show="openMenu === 'tiketi'" @click.stop>
+                <div x-show="admin_logged_in" style="padding: 4px 10px;">
+                    <form method="POST" style="display:flex; gap:4px; align-items:center;">
+                        <input type="text" name="ticket_number" placeholder="URL tiketa" required style="width:220px; font-size:12px;">
+                        <button type="submit" style="font-size:12px; padding:2px 8px;">Dodaj</button>
+                    </form>
+                </div>
+                <hr x-show="admin_logged_in">
+                <a x-show="admin_logged_in" href="/update">🔄 Ažuriraj rezultate</a>
+                <a href="/leaderboard">🏆 Poredak</a>
+                <a href="/pravila">📜 Pravila igre</a>
+            </div>
+        </div>
+
+        <!-- Admin menu -->
+        <div class="menu-item" @click="openMenu = openMenu === 'admin' ? null : 'admin'">
+            Admin
+            <div class="dropdown" x-show="openMenu === 'admin'">
+                <a x-show="!admin_logged_in" @click.prevent="loginModal=true; openMenu=null" href="#">🔑 Prijava</a>
+                <a x-show="admin_logged_in" href="/logout">🚪 Odjava</a>
+                <template x-if="admin_logged_in">
+                    <span style="padding: 4px 10px; color: #555; font-size:12px; display:block;">
+                        ✔ Prijavljen kao admin
+                    </span>
+                </template>
+            </div>
+        </div>
+
+    </div>
+
     <div class="window-body">
 
-        <!-- Admin Login -->
-        <div x-show="!admin_logged_in">
-            <button @click="loginModal=true">Admin Login</button>
-        </div>
-
-        <div x-show="admin_logged_in">
-            <p>Logged in as admin | <a href="/logout">Logout</a></p>
-        </div>
-
-        <!-- Admin Form -->
-        <form method="POST" x-show="admin_logged_in" class="field-row">
-            <input type="text" name="ticket_number" placeholder="Ticket Number" required>
-            <button type="submit">Dodaj Ticket</button>
-        </form>
-
-        <!-- Navigation -->
-        <section class="field-row">
-            <a href="/update" x-show="admin_logged_in">
-                <button>Azuriraj Rezultate</button>
-            </a>
-
-            <a href="/leaderboard">
-                <button>Poredak</button>
-            </a>
-        </section>
-
-        <hr>
+        <hr style="margin-top:0;">
 
         <!-- Loss Streaks -->
         <div class="window" style="margin-bottom: 8px;">
@@ -65,14 +87,14 @@
                     <div style="display:flex; gap:3px; margin-top:4px;">
                         {% for i in range(1, 4) %}
                             {% if i <= streak %}
-                                <span title="Poraz {{ i }}" style="font-size:1.3em;">💀</span>
+                                <span class="skull" title="Poraz {{ i }}" style="font-size:1.3em;">💀</span>
                             {% else %}
-                                <span title="Slobodno {{ i }}" style="font-size:1.3em; opacity:0.2;">💀</span>
+                                <span class="skull" title="Slobodno {{ i }}" style="font-size:1.3em; opacity:0.2;">💀</span>
                             {% endif %}
                         {% endfor %}
                     </div>
                     <small style="margin-top:2px; color: {% if streak == 3 %}red{% elif streak == 2 %}orange{% elif streak == 1 %}goldenrod{% else %}gray{% endif %};">
-                        {% if streak == 0 %}Dobar{% elif streak == 3 %}KAZNA!{% else %}{{ streak }}/3{% endif %}
+                        {% if streak == 0 %}Čist{% elif streak == 3 %}MAX!{% else %}{{ streak }}/3{% endif %}
                     </small>
                 </div>
                 {% endfor %}
