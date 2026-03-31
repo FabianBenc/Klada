@@ -13,18 +13,6 @@
 
     <!-- Alpine -->
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-
-    <!-- Skull animation -->
-    <style>
-        .skull {
-            display: inline-block;
-            transition: transform 0.3s ease;
-        }
-
-        .skull:hover {
-            transform: rotate(360deg) scale(1.2);
-        }
-    </style>
 </head>
 
 <body>
@@ -87,9 +75,9 @@
                     <div style="display:flex; gap:3px; margin-top:4px;">
                         {% for i in range(1, 4) %}
                             {% if i <= streak %}
-                                <span class="skull" title="Poraz {{ i }}" style="font-size:1.3em;">💀</span>
+                                <span title="Poraz {{ i }}" style="font-size:1.3em;">💀</span>
                             {% else %}
-                                <span class="skull" title="Slobodno {{ i }}" style="font-size:1.3em; opacity:0.2;">💀</span>
+                                <span title="Slobodno {{ i }}" style="font-size:1.3em; opacity:0.2;">💀</span>
                             {% endif %}
                         {% endfor %}
                     </div>
@@ -108,12 +96,18 @@
 
         <!-- Tickets -->
         {% for ticket in tickets %}
+        {% set status = normalize_result(ticket[4]) %}
+        <div class="window" x-data="{ open: true }" x-show="filterTicket('{{ ticket[1] }}')"
         <div class="window" x-data="{ open: true }" x-show="filterTicket('{{ ticket[1] }}')">
 
-            <div class="title-bar" style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="title-bar" style="display:flex; justify-content:space-between; align-items:center;
+                {% if status == 'WINNING' %}background: linear-gradient(to right, #006400, #228b22) !important;
+                {% elif status == 'LOSING' %}background: linear-gradient(to right, #8b0000, #cc0000) !important;
+                {% endif %}">
                 
                 <!-- Click to open/close -->
                 <div class="title-bar-text" @click="open = !open" style="cursor:pointer;">
+                    {% if status == 'WINNING' %}✅{% elif status == 'LOSING' %}❌{% else %}⏳{% endif %}
                     Ticket: {{ ticket[1] }} <span x-text="open ? '▼' : '▶'"></span>
                 </div>
 
@@ -129,7 +123,7 @@
             </div>
 
             <div class="window-body" x-show="open">
-                <p><small>Kreirano: {{ ticket[2] }} | Azurirano: {{ ticket[3] }}</small></p>
+                <p><small>Kreirano: {{ ticket[2] }} | Azurirano: {{ ticket[3] }} | <a href="https://applink.psk.hr/ticketdetail?id={{ ticket[5] }}&source=SB" target="_blank">🔗 Otvori tiket</a></small></p>
 
                 <table>
                     <thead>
@@ -151,7 +145,13 @@
                             </td>
                             <td>{{ bet[2] }}</td>
                             <td>{{ bet[3] }}</td>
-                            <td class="{{ bet[4] }}">{{ bet[4] }}</td>
+                            {% set leg_result = normalize_result(bet[4]) %}
+                            <td class="{{ leg_result }}">
+                                {% if leg_result == 'WINNING' %}✅ Pogodak
+                                {% elif leg_result == 'LOSING' %}❌ Promašaj
+                                {% else %}⏳ U tijeku
+                                {% endif %}
+                            </td>
                         </tr>
                         {% endif %}
                         {% endfor %}

@@ -67,6 +67,9 @@ def init_db():
     if "ticket_jwt" not in columns:
         c.execute("ALTER TABLE tickets ADD COLUMN ticket_jwt TEXT")
 
+    if "ticket_result" not in columns:
+        c.execute("ALTER TABLE tickets ADD COLUMN ticket_result TEXT")
+
     c.execute("""
         CREATE TABLE IF NOT EXISTS loss_streaks (
             player INTEGER PRIMARY KEY,
@@ -115,6 +118,35 @@ def fetch_data(ticket_id):
         print("API error:", e)
         return None
 
+def normalize_result(api_result):
+    """
+    Maps raw PSK API result strings to one of three display states:
+    WINNING / WINNING_VOIDED / VOIDED  → 'WINNING'
+    LOSING                              → 'LOSING'
+    anything else (None, PENDING, etc.) → 'PENDING'
+    """
+    if api_result in ("WINNING", "WINNING_VOIDED", "VOIDED"):
+        return "WINNING"
+    if api_result == "LOSING":
+        return "LOSING"
+    return "PENDING"
+
+
+def ticket_overall_status(bets_results):
+    """
+    Derives ticket-level status from a list of normalised bet results.
+    - Any PENDING  → ticket is PENDING
+    - All WINNING  → ticket is WINNING
+    - Any LOSING   → ticket is LOSING
+    """
+    normalised = [normalize_result(r) for r in bets_results]
+    if any(r == "PENDING" for r in normalised):
+        return "PENDING"
+    if any(r == "LOSING" for r in normalised):
+        return "LOSING"
+    return "WINNING"
+
+
 def save_ticket(ticket_number, data):
     if not data:
         return
@@ -133,9 +165,9 @@ def save_ticket(ticket_number, data):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     c.execute("""
-        INSERT INTO tickets (ticket_id, ticket_number, created_at, last_updated, ticket_jwt)
-        VALUES (?, ?, ?, ?, ?)
-    """, (ticket_id, number, now, now, ticket_number))
+        INSERT INTO tickets (ticket_id, ticket_number, created_at, last_updated, ticket_jwt, ticket_result)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (ticket_id, number, now, now, ticket_number, data.get("result")))
 
     legs = data.get("legs", [])
     total_legs = len(legs)
@@ -251,9 +283,9 @@ def update_ticket_results():
             """, (leg.get("result"), ticket_id, leg.get("fixtureName")))
 
         c.execute("""
-            UPDATE tickets SET last_updated=?
+            UPDATE tickets SET last_updated=?, ticket_result=?
             WHERE ticket_id=?
-        """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ticket_id))
+        """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), data.get("result"), ticket_id))
 
         conn.commit()
 
@@ -306,7 +338,7 @@ def index():
     c = conn.cursor()
 
     c.execute("""
-        SELECT ticket_id, ticket_number, created_at, last_updated
+        SELECT ticket_id, ticket_number, created_at, last_updated, ticket_result, ticket_jwt
         FROM tickets
         ORDER BY id DESC
     """)
@@ -327,12 +359,13 @@ def index():
         bets=bets,
         player_names=PLAYER_NAMES,
         admin_logged_in=session.get("admin_logged_in"),
-        loss_streaks=get_loss_streaks()
+        loss_streaks=get_loss_streaks(),
+        normalize_result=normalize_result
     )
 
 @app.route("/pravila")
 def pravila():
-    return render_template("pravilaigre.html")
+    return render_template("PravilaIgre.html")
 
 
 @app.route("/leaderboard")
