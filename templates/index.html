@@ -8,7 +8,7 @@
     <!-- System.css -->
     <link rel="stylesheet" href="https://unpkg.com/@sakun/system.css" />
 
-    <!-- Your overrides -->
+    <!-- Overrides -->
     <link rel="stylesheet" href="/static/style.css">
 
     <!-- Alpine -->
@@ -82,7 +82,7 @@
                         {% endfor %}
                     </div>
                     <small style="margin-top:2px; color: {% if streak == 3 %}red{% elif streak == 2 %}orange{% elif streak == 1 %}goldenrod{% else %}gray{% endif %};">
-                        {% if streak == 0 %}Čist{% elif streak == 3 %}MAX!{% else %}{{ streak }}/3{% endif %}
+                        {% if streak == 0 %}Siguran{% elif streak == 3 %}KAZNA!{% else %}{{ streak }}/3{% endif %}
                     </small>
                 </div>
                 {% endfor %}
@@ -97,27 +97,31 @@
         <!-- Tickets -->
         {% for ticket in tickets %}
         {% set status = normalize_result(ticket[4]) %}
-        <div class="window" x-data="{ open: true }" x-show="filterTicket('{{ ticket[1] }}')"
-        <div class="window" x-data="{ open: true }" x-show="filterTicket('{{ ticket[1] }}')">
+        <div class="window" x-data="{ open: true, editing: false }" x-show="filterTicket('{{ ticket[1] }}')">
 
             <div class="title-bar" style="display:flex; justify-content:space-between; align-items:center;
                 {% if status == 'WINNING' %}background: linear-gradient(to right, #006400, #228b22) !important;
                 {% elif status == 'LOSING' %}background: linear-gradient(to right, #8b0000, #cc0000) !important;
                 {% endif %}">
-                
+
                 <!-- Click to open/close -->
                 <div class="title-bar-text" @click="open = !open" style="cursor:pointer;">
                     {% if status == 'WINNING' %}✅{% elif status == 'LOSING' %}❌{% else %}⏳{% endif %}
                     Ticket: {{ ticket[1] }} <span x-text="open ? '▼' : '▶'"></span>
                 </div>
 
-                <!-- Delete button (admin only) -->
+                <!-- Admin buttons -->
                 {% if admin_logged_in %}
-                <form method="POST" action="/delete_ticket/{{ ticket[0] }}"
-                      onsubmit="return confirm('Are you sure you want to delete this ticket?');"
-                      style="margin:0;">
-                    <button type="submit" style="background:red; color:white; padding:2px 8px;">X</button>
-                </form>
+                <div style="display:flex; gap:4px; margin:0;">
+                    <button type="button" @click.stop="editing = !editing"
+                            style="font-size:11px; padding:1px 6px;"
+                            x-text="editing ? '✕ Odustani' : '✏ Uredi'"></button>
+                    <form method="POST" action="/delete_ticket/{{ ticket[0] }}"
+                          onsubmit="return confirm('Are you sure you want to delete this ticket?');"
+                          style="margin:0;">
+                        <button type="submit" style="background:red; color:white; padding:1px 6px; font-size:11px;">✕</button>
+                    </form>
+                </div>
                 {% endif %}
 
             </div>
@@ -125,7 +129,8 @@
             <div class="window-body" x-show="open">
                 <p><small>Kreirano: {{ ticket[2] }} | Azurirano: {{ ticket[3] }} | <a href="https://applink.psk.hr/ticketdetail?id={{ ticket[5] }}&source=SB" target="_blank">🔗 Otvori tiket</a></small></p>
 
-                <table>
+                <!-- View mode -->
+                <table x-show="!editing">
                     <thead>
                         <tr>
                             <th>Igrac</th>
@@ -157,6 +162,48 @@
                         {% endfor %}
                     </tbody>
                 </table>
+
+                <!-- Edit mode -->
+                <form method="POST" action="/reassign_legs/{{ ticket[0] }}" x-show="editing">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Igrac</th>
+                                <th>Par</th>
+                                <th>Tecaj</th>
+                                <th>Rezultat</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for bet in bets %}
+                            {% if bet[0] == ticket[0] %}
+                            <tr>
+                                <td>
+                                    <select name="bet_player_{{ bet[5] }}" style="font-size:12px; border: 2px inset #c0c0c0; background:#fff; padding:2px;">
+                                        {% for pid, pname in player_names.items() %}
+                                        <option value="{{ pid }}" {% if pid == bet[1] %}selected{% endif %}>{{ pname }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                                <td>{{ bet[2] }}</td>
+                                <td>{{ bet[3] }}</td>
+                                {% set leg_result = normalize_result(bet[4]) %}
+                                <td class="{{ leg_result }}">
+                                    {% if leg_result == 'WINNING' %}✅ Pogodak
+                                    {% elif leg_result == 'LOSING' %}❌ Promašaj
+                                    {% else %}⏳ U tijeku
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endif %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    <div style="margin-top:6px;">
+                        <button type="submit" style="background:#006400; color:white;">💾 Spremi</button>
+                    </div>
+                </form>
+
             </div>
 
         </div>

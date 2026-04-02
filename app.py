@@ -345,7 +345,7 @@ def index():
     tickets = c.fetchall()
 
     c.execute("""
-        SELECT ticket_id, player, fixture_name, odds, result
+        SELECT ticket_id, player, fixture_name, odds, result, id
         FROM bets
         ORDER BY ticket_id, player
     """)
@@ -376,7 +376,7 @@ def leaderboard():
     leaderboard_data = []
 
     for player_id, name in PLAYER_NAMES.items():
-        c.execute("SELECT COUNT(*) FROM bets WHERE player=?", (player_id,))
+        c.execute("SELECT COUNT(*) FROM bets WHERE player=? AND (result!='UNKNOWN' AND result!='PENDING')", (player_id,))
         total = c.fetchone()[0]
 
         c.execute("SELECT COUNT(*) FROM bets WHERE player=? AND (result='WINNING' OR result='VOIDED')", (player_id,))
@@ -439,14 +439,16 @@ def recalculate_all_streaks():
     streaks = {player_id: 0 for player_id in PLAYER_NAMES}
 
     for ticket_id in ticket_ids:
-        c.execute("SELECT DISTINCT player FROM bets WHERE ticket_id=?", (ticket_id,))
-        players = [row[0] for row in c.fetchall()]
-
-        for player in players:
+        for player in PLAYER_NAMES:
             c.execute("SELECT result FROM bets WHERE ticket_id=? AND player=?", (ticket_id, player))
             results = [row[0] for row in c.fetchall()]
 
-            if not results or any(r in (None, "PENDING", "UNKNOWN") for r in results):
+            # Player has no legs on this ticket — skip, don't touch their streak
+            if not results:
+                continue
+
+            # Legs exist but not all resolved yet — skip
+            if any(r in (None, "PENDING", "UNKNOWN") for r in results):
                 continue
 
             all_losing = all(r == "LOSING" for r in results)
@@ -464,6 +466,35 @@ def recalculate_all_streaks():
 
     conn.commit()
     conn.close()
+
+
+@app.route("/reassign_legs/<ticket_id>", methods=["POST"])
+def reassign_legs(ticket_id):
+    if not session.get("admin_logged_in"):
+        return "Unauthorized", 403
+
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    # Form sends bet_player_<bet_id> = <player_id> for each leg
+    for key, value in request.form.items():
+        if key.startswith("bet_player_"):
+            bet_id = key[len("bet_player_"):]
+            try:
+                new_player = int(value)
+                bet_id = int(bet_id)
+            except ValueError:
+                continue
+            if new_player in PLAYER_NAMES:
+                c.execute("UPDATE bets SET player=? WHERE id=? AND ticket_id=?",
+                          (new_player, bet_id, ticket_id))
+
+    conn.commit()
+    conn.close()
+
+    recalculate_all_streaks()
+
+    return redirect("/")
 
 
 @app.route("/delete_ticket/<ticket_id>", methods=["POST"])
