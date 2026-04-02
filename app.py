@@ -365,7 +365,7 @@ def index():
 
 @app.route("/pravila")
 def pravila():
-    return render_template("PravilaIgre.html")
+    return render_template("pravilaigre.html")
 
 
 @app.route("/leaderboard")
