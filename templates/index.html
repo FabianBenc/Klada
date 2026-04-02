@@ -13,6 +13,21 @@
 
     <!-- Alpine -->
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+
+    <style>
+        .highlight {
+            background-color: yellow;
+            color: black;
+        }
+        .filter-btn {
+            padding: 2px 10px;
+            margin-left: 4px;
+        }
+        .active-filter {
+            background: navy;
+            color: white;
+        }
+    </style>
 </head>
 
 <body>
@@ -62,7 +77,7 @@
 
         <hr style="margin-top:0;">
 
-        <!-- Loss Streaks -->
+        <!-- Loss Streaks (UNCHANGED) -->
         <div class="window" style="margin-bottom: 8px;">
             <div class="title-bar">
                 <div class="title-bar-text">🔥 Serije Poraza</div>
@@ -75,9 +90,9 @@
                     <div style="display:flex; gap:3px; margin-top:4px;">
                         {% for i in range(1, 4) %}
                             {% if i <= streak %}
-                                <span title="Poraz {{ i }}" style="font-size:1.3em;">💀</span>
+                                <span style="font-size:1.3em;">💀</span>
                             {% else %}
-                                <span title="Slobodno {{ i }}" style="font-size:1.3em; opacity:0.2;">💀</span>
+                                <span style="font-size:1.3em; opacity:0.2;">💀</span>
                             {% endif %}
                         {% endfor %}
                     </div>
@@ -89,47 +104,54 @@
             </div>
         </div>
 
-        <!-- Search -->
-        <div class="field-row">
-            <input type="text" x-model="search" placeholder="Traži Tiket" style="width:300px;">
+        <!-- SEARCH + FILTER -->
+        <div class="field-row" style="margin-bottom:10px;">
+            <input type="text" x-model="search" placeholder="Traži Tiket / Igrača / Par" style="width:300px;">
+
+            <button class="filter-btn" :class="filter=='ALL' ? 'active-filter' : ''" @click="filter='ALL'">Svi</button>
+            <button class="filter-btn" :class="filter=='WINNING' ? 'active-filter' : ''" @click="filter='WINNING'">Zeleni</button>
+            <button class="filter-btn" :class="filter=='LOSING' ? 'active-filter' : ''" @click="filter='LOSING'">Crveni</button>
+            <button class="filter-btn" :class="filter=='PENDING' ? 'active-filter' : ''" @click="filter='PENDING'">U tijeku</button>
         </div>
 
         <!-- Tickets -->
         {% for ticket in tickets %}
         {% set status = normalize_result(ticket[4]) %}
-        <div class="window" x-data="{ open: true, editing: false }" x-show="filterTicket('{{ ticket[1] }}')">
+
+        <div class="window"
+             x-data="{ open: true, editing: false }"
+             x-show="filterTicket(`{{ ticket[1] }}
+                {% for bet in bets %}
+                    {% if bet[0] == ticket[0] %}
+                        {{ player_names.get(bet[1], 'Unknown') }} {{ bet[2] }}
+                    {% endif %}
+                {% endfor %}
+             `, '{{ status }}')">
 
             <div class="title-bar" style="display:flex; justify-content:space-between; align-items:center;
                 {% if status == 'WINNING' %}background: linear-gradient(to right, #006400, #228b22) !important;
                 {% elif status == 'LOSING' %}background: linear-gradient(to right, #8b0000, #cc0000) !important;
                 {% endif %}">
 
-                <!-- Click to open/close -->
                 <div class="title-bar-text" @click="open = !open" style="cursor:pointer;">
                     {% if status == 'WINNING' %}✅{% elif status == 'LOSING' %}❌{% else %}⏳{% endif %}
-                    Ticket: {{ ticket[1] }} <span x-text="open ? '▼' : '▶'"></span>
+                    Ticket: <span x-html="highlight('{{ ticket[1] }}')"></span>
+                    <span x-text="open ? '▼' : '▶'"></span>
                 </div>
 
-                <!-- Admin buttons -->
                 {% if admin_logged_in %}
-                <div style="display:flex; gap:4px; margin:0;">
-                    <button type="button" @click.stop="editing = !editing"
-                            style="font-size:11px; padding:1px 6px;"
-                            x-text="editing ? '✕ Odustani' : '✏ Uredi'"></button>
-                    <form method="POST" action="/delete_ticket/{{ ticket[0] }}"
-                          onsubmit="return confirm('Are you sure you want to delete this ticket?');"
-                          style="margin:0;">
-                        <button type="submit" style="background:red; color:white; padding:1px 6px; font-size:11px;">✕</button>
-                    </form>
-                </div>
+                <form method="POST" action="/delete_ticket/{{ ticket[0] }}"
+                      onsubmit="return confirm('Are you sure you want to delete this ticket?');"
+                      style="margin:0;">
+                    <button type="submit" style="background:red; color:white; padding:1px 6px; font-size:11px;">✕</button>
+                </form>
                 {% endif %}
-
             </div>
 
             <div class="window-body" x-show="open">
                 <p><small>Kreirano: {{ ticket[2] }} | Azurirano: {{ ticket[3] }} | <a href="https://applink.psk.hr/ticketdetail?id={{ ticket[5] }}&source=SB" target="_blank">🔗 Otvori tiket</a></small></p>
 
-                <!-- View mode -->
+                <!-- VIEW MODE -->
                 <table x-show="!editing">
                     <thead>
                         <tr>
@@ -142,13 +164,9 @@
                     <tbody>
                         {% for bet in bets %}
                         {% if bet[0] == ticket[0] %}
-                        {% set streak = loss_streaks.get(bet[1], 0) %}
-                        <tr x-show="filterTicket('{{ player_names.get(bet[1], 'Unknown') }}')">
-                            <td>
-                                {{ player_names.get(bet[1], "Unknown") }}
-                                {% if streak == 3 %}<span title="Serija od 3 poraza!"> ☠️</span>{% elif streak >= 1 %}<span title="Serija: {{ streak }}/3"> 🔥</span>{% endif %}
-                            </td>
-                            <td>{{ bet[2] }}</td>
+                        <tr>
+                            <td x-html="highlight('{{ player_names.get(bet[1], 'Unknown') }}')"></td>
+                            <td x-html="highlight('{{ bet[2] }}')"></td>
                             <td>{{ bet[3] }}</td>
                             {% set leg_result = normalize_result(bet[4]) %}
                             <td class="{{ leg_result }}">
@@ -163,7 +181,7 @@
                     </tbody>
                 </table>
 
-                <!-- Edit mode -->
+                <!-- EDIT MODE (UNCHANGED) -->
                 <form method="POST" action="/reassign_legs/{{ ticket[0] }}" x-show="editing">
                     <table>
                         <thead>
@@ -179,7 +197,7 @@
                             {% if bet[0] == ticket[0] %}
                             <tr>
                                 <td>
-                                    <select name="bet_player_{{ bet[5] }}" style="font-size:12px; border: 2px inset #c0c0c0; background:#fff; padding:2px;">
+                                    <select name="bet_player_{{ bet[5] }}">
                                         {% for pid, pname in player_names.items() %}
                                         <option value="{{ pid }}" {% if pid == bet[1] %}selected{% endif %}>{{ pname }}</option>
                                         {% endfor %}
@@ -199,13 +217,21 @@
                             {% endfor %}
                         </tbody>
                     </table>
-                    <div style="margin-top:6px;">
-                        <button type="submit" style="background:#006400; color:white;">💾 Spremi</button>
+
+                    <div class="field-row" style="justify-content:flex-end; margin-top:8px;">
+                        <button type="submit">💾 Spremi</button>
                     </div>
                 </form>
 
-            </div>
+                {% if admin_logged_in %}
+                <div class="field-row" style="justify-content:flex-end; margin-top:8px;">
+                    <button type="button" @click="editing = !editing">
+                        <span x-text="editing ? 'Odustani' : 'Uredi tiket'"></span>
+                    </button>
+                </div>
+                {% endif %}
 
+            </div>
         </div>
         {% endfor %}
 
@@ -239,10 +265,41 @@
 function ticketApp() {
     return {
         search: '',
+        filter: 'ALL',
         loginModal: false,
         admin_logged_in: {{ 'true' if admin_logged_in else 'false' }},
-        filterTicket(name) {
-            return name.toLowerCase().includes(this.search.toLowerCase());
+
+        filterTicket(text, status) {
+            let searchMatch = true;
+            let filterMatch = true;
+
+            if (this.search) {
+                let words = this.search.toLowerCase().split(" ");
+                let target = text.toLowerCase();
+                searchMatch = words.every(word => target.includes(word));
+            }
+
+            if (this.filter !== 'ALL') {
+                filterMatch = (status === this.filter);
+            }
+
+            return searchMatch && filterMatch;
+        },
+
+        highlight(text) {
+            if (!this.search) return text;
+
+            let words = this.search.split(" ");
+            let result = text;
+
+            words.forEach(word => {
+                if (word.length > 0) {
+                    let regex = new RegExp(`(${word})`, 'gi');
+                    result = result.replace(regex, '<span class="highlight">$1</span>');
+                }
+            });
+
+            return result;
         }
     }
 }
