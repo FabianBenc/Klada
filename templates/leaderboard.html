@@ -38,7 +38,7 @@
                     <th>Pogodeno ✅</th>
                     <th>Fulano ❌</th>
                     <th>Postotak (%)</th>
-                    <th>Prosjecni tecaj</th>
+                    <th>Prosj. tečaj (pogođeni)</th>
                     <th>Najveci pogodeni tecaj</th>
                 </tr>
             </thead>
@@ -59,6 +59,24 @@
                     <td>{{ player.avg_odds }}</td>
                     <td>{{ player.max_win }}</td>
                 </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <h3 style="margin-top:20px;">💸 Ulaganja</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Igrac</th>
+                    <th>Ukupno plaćeno (€)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in payment_data %}
+                    <tr>
+                        <td>{{ row.name }}</td>
+                        <td><strong style="color: red;">€{{ "%.2f"|format(row.total_paid) }}</strong></td>
+                    </tr>
                 {% endfor %}
             </tbody>
         </table>

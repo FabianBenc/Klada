@@ -385,7 +385,8 @@ def leaderboard():
         c.execute("SELECT COUNT(*) FROM bets WHERE player=? AND result='LOSING'", (player_id,))
         missed = c.fetchone()[0]
 
-        c.execute("SELECT AVG(odds) FROM bets WHERE player=?", (player_id,))
+        # Average odds from WINNING legs only
+        c.execute("SELECT AVG(odds) FROM bets WHERE player=? AND (result='WINNING' OR result='VOIDED')", (player_id,))
         avg_odds = c.fetchone()[0]
 
         c.execute("SELECT MAX(odds) FROM bets WHERE player=? AND (result='WINNING' OR result='VOIDED')", (player_id,))
@@ -395,12 +396,50 @@ def leaderboard():
 
         leaderboard_data.append({
             "name": name,
+            "player_id": player_id,
             "win_rate": round(win_rate, 2),
             "avg_odds": round(avg_odds, 2) if avg_odds else 0,
             "max_win": max_win if max_win else 0,
             "guessed": guessed,
             "missed": missed
         })
+
+    # ── Payment calculation ───────────────────────────────────────────────────
+    # Fetch all resolved tickets in chronological order
+    num_players = len(PLAYER_NAMES)
+
+    c.execute("""
+        SELECT ticket_id FROM tickets
+        WHERE ticket_result IS NOT NULL AND ticket_result != 'PENDING'
+        ORDER BY id ASC
+    """)
+    resolved_ticket_ids = [row[0] for row in c.fetchall()]
+
+    # payments[player_id] = total euros paid
+    payments = {pid: 0.0 for pid in PLAYER_NAMES}
+
+    for i, ticket_id in enumerate(resolved_ticket_ids):
+        if i == 0:
+            # First ticket: everyone pays €1
+            for pid in PLAYER_NAMES:
+                payments[pid] += 1.0
+        else:
+            # Find who lost at least one leg in the PREVIOUS ticket
+            prev_ticket_id = resolved_ticket_ids[i - 1]
+            losers = set()
+            for pid in PLAYER_NAMES:
+                c.execute("""
+                    SELECT COUNT(*) FROM bets
+                    WHERE ticket_id=? AND player=? AND result='LOSING'
+                """, (prev_ticket_id, pid))
+                lost_count = c.fetchone()[0]
+                if lost_count > 0:
+                    losers.add(pid)
+
+            if losers:
+                cost_per_loser = round(num_players / len(losers), 2)
+                for pid in losers:
+                    payments[pid] += cost_per_loser
 
     conn.close()
 
@@ -409,7 +448,13 @@ def leaderboard():
         reverse=True
     )
 
-    return render_template("leaderboard.html", data=leaderboard_data)
+    # Build payment rows in same sorted order as leaderboard
+    payment_data = [
+        {"name": row["name"], "total_paid": round(payments[row["player_id"]], 2)}
+        for row in leaderboard_data
+    ]
+
+    return render_template("leaderboard.html", data=leaderboard_data, payment_data=payment_data)
 
 @app.route('/update')
 def update():
