@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, session
 import requests
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 import threading
 import time
 import os
@@ -118,6 +118,19 @@ def fetch_data(ticket_id):
         print("API error:", e)
         return None
 
+def parse_psk_date(iso_string):
+    """
+    Converts PSK API ISO 8601 UTC timestamp (e.g. '2026-03-27T10:46:28Z')
+    to a readable local string. Falls back to current time if parsing fails.
+    """
+    try:
+        dt = datetime.strptime(iso_string, "%Y-%m-%dT%H:%M:%SZ")
+        dt = dt.replace(tzinfo=timezone.utc).astimezone()
+        return dt.strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return datetime.now().strftime("%Y-%m-%d %H:%M")
+
+
 def normalize_result(api_result):
     """
     Maps raw PSK API result strings to one of three display states:
@@ -163,11 +176,12 @@ def save_ticket(ticket_number, data):
         return
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    psk_created = parse_psk_date(data.get("placementDetailsTime", ""))
 
     c.execute("""
         INSERT INTO tickets (ticket_id, ticket_number, created_at, last_updated, ticket_jwt, ticket_result)
         VALUES (?, ?, ?, ?, ?, ?)
-    """, (ticket_id, number, now, now, ticket_number, data.get("result")))
+    """, (ticket_id, number, psk_created, now, ticket_number, data.get("result")))
 
     legs = data.get("legs", [])
     total_legs = len(legs)
@@ -455,6 +469,56 @@ def leaderboard():
     ]
 
     return render_template("leaderboard.html", data=leaderboard_data, payment_data=payment_data)
+
+
+@app.route("/chart-data")
+def chart_data():
+    from flask import jsonify
+
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    c.execute("""
+        SELECT ticket_id, ticket_number FROM tickets
+        WHERE ticket_result IS NOT NULL AND ticket_result != 'PENDING'
+        ORDER BY id ASC
+    """)
+    resolved_tickets = c.fetchall()
+
+    labels = []
+    series = {pid: [] for pid in PLAYER_NAMES}
+    totals  = {pid: 0 for pid in PLAYER_NAMES}
+    wins    = {pid: 0 for pid in PLAYER_NAMES}
+
+    for ticket_id, ticket_number in resolved_tickets:
+        labels.append(ticket_number)
+
+        for pid in PLAYER_NAMES:
+            c.execute("""
+                SELECT result FROM bets
+                WHERE ticket_id=? AND player=?
+                AND result NOT IN ('PENDING', 'UNKNOWN')
+                AND result IS NOT NULL
+            """, (ticket_id, pid))
+            results = [r[0] for r in c.fetchall()]
+
+            for r in results:
+                totals[pid] += 1
+                if r in ("WINNING", "VOIDED", "WINNING_VOIDED"):
+                    wins[pid] += 1
+
+            rate = round(wins[pid] / totals[pid] * 100, 1) if totals[pid] > 0 else 0
+            series[pid].append(rate)
+
+    conn.close()
+
+    datasets = [
+        {"label": PLAYER_NAMES[pid], "data": series[pid]}
+        for pid in PLAYER_NAMES
+    ]
+
+    return jsonify({"labels": labels, "datasets": datasets})
+
 
 @app.route('/update')
 def update():

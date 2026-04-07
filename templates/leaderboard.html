@@ -3,10 +3,12 @@
 <head>
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='icon.png') }}">
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Poredak – Propali Kladionicari</title>
 
     <link rel="stylesheet" href="https://unpkg.com/@sakun/system.css">
     <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 
 <body>
@@ -28,67 +30,148 @@
     </div>
 
     <div class="window-body">
+
+        <!-- ── Leaderboard table ── -->
         <h3>Tablica zlatnih, srebrnih i broncanih</h3>
 
-        <table>
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>Igrac</th>
-                    <th>Pogodeno ✅</th>
-                    <th>Fulano ❌</th>
-                    <th>Postotak (%)</th>
-                    <th>Prosj. tečaj (pogođeni)</th>
-                    <th>Najveci pogodeni tecaj</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for player in data %}
-                <tr>
-                    <td>
-                        {% if loop.index == 1 %}🥇
-                        {% elif loop.index == 2 %}🥈
-                        {% elif loop.index == 3 %}🥉
-                        {% else %}{{ loop.index }}
-                        {% endif %}
-                    </td>
-                    <td>{{ player.name }}</td>
-                    <td class="WON">{{ player.guessed }}</td>
-                    <td class="LOST">{{ player.missed }}</td>
-                    <td>{{ player.win_rate }}</td>
-                    <td>{{ player.avg_odds }}</td>
-                    <td>{{ player.max_win }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Igrac</th>
+                        <th>✅</th>
+                        <th>❌</th>
+                        <th>%</th>
+                        <th class="hide-mobile">Prosj. tečaj (pogođeni)</th>
+                        <th class="hide-mobile">Najveci pogodeni tecaj</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for player in data %}
+                    <tr>
+                        <td>
+                            {% if loop.index == 1 %}🥇
+                            {% elif loop.index == 2 %}🥈
+                            {% elif loop.index == 3 %}🥉
+                            {% else %}{{ loop.index }}
+                            {% endif %}
+                        </td>
+                        <td>{{ player.name }}</td>
+                        <td class="WON">{{ player.guessed }}</td>
+                        <td class="LOST">{{ player.missed }}</td>
+                        <td>{{ player.win_rate }}%</td>
+                        <td class="hide-mobile">{{ player.avg_odds }}</td>
+                        <td class="hide-mobile">{{ player.max_win }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
 
-        <h3 style="margin-top:20px;">💸 Ulaganja</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Igrac</th>
-                    <th>Ukupno plaćeno (€)</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in payment_data %}
+        <!-- ── Win rate chart ── -->
+        <h3 style="margin-top:24px;">📈 Kumulativni postotak pogotka</h3>
+
+        <div class="window" style="margin-bottom:16px;">
+            <div class="title-bar">
+                <div class="title-bar-text">Win rate po tiketu</div>
+            </div>
+            <div class="window-body" style="padding:8px; background:#fff;">
+                <canvas id="winRateChart" style="width:100%; max-height:320px;"></canvas>
+                <p id="chart-empty" style="display:none; text-align:center; color:#888; margin:24px 0;">
+                    Nema dovoljno podataka za prikaz grafa.
+                </p>
+            </div>
+        </div>
+
+        <!-- ── Payments table ── -->
+        <h3 style="margin-top:8px;">💸 Ulaganja</h3>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Igrac</th>
+                        <th>Ukupno plaćeno (€)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in payment_data %}
                     <tr>
                         <td>{{ row.name }}</td>
-                        <td><strong style="color: red;">€{{ "%.2f"|format(row.total_paid) }}</strong></td>
+                        <td><strong style="color:red;">€{{ "%.2f"|format(row.total_paid) }}</strong></td>
                     </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
     </div>
 </div>
 
 <script>
+    // ── Dropdown close ──
     document.addEventListener('click', function(e) {
         document.querySelectorAll('.dropdown').forEach(d => {
             if (!d.parentElement.contains(e.target)) d.style.display = 'none';
         });
     });
+
+    // ── Chart colours — one per player ──
+    const COLORS = [
+        '#e6194b','#3cb44b','#4363d8','#f58231',
+        '#911eb4','#42d4f4','#f032e6','#bfef45',
+    ];
+
+    fetch('/chart-data')
+        .then(r => r.json())
+        .then(data => {
+            if (!data.labels || data.labels.length < 2) {
+                document.getElementById('chart-empty').style.display = 'block';
+                return;
+            }
+
+            const datasets = data.datasets.map((ds, i) => ({
+                label: ds.label,
+                data: ds.data,
+                borderColor: COLORS[i % COLORS.length],
+                backgroundColor: COLORS[i % COLORS.length] + '22',
+                tension: 0.3,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                fill: false,
+            }));
+
+            new Chart(document.getElementById('winRateChart'), {
+                type: 'line',
+                data: { labels: data.labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}%`
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            min: 0,
+                            max: 100,
+                            ticks: { callback: v => v + '%' },
+                            grid: { color: '#e0e0e0' }
+                        },
+                        x: {
+                            grid: { color: '#e0e0e0' },
+                            ticks: { maxRotation: 45, font: { size: 11 } }
+                        }
+                    }
+                }
+            });
+        });
 </script>
 
 </body>

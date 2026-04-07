@@ -136,3 +136,65 @@ th {
     color: white !important;
     font-weight: bold;
 }
+/* ── Mobile responsiveness ─────────────────────────────────────────── */
+.table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 640px) {
+    body {
+        padding: 8px;
+    }
+
+    .hide-mobile {
+        display: none;
+    }
+
+    /* Stack menu bar items */
+    .menu-bar {
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    /* Full-width inputs in dropdowns */
+    .dropdown input[type="text"] {
+        width: 160px !important;
+    }
+
+    /* Tighter table cells */
+    th, td {
+        padding: 4px 6px;
+        font-size: 12px;
+    }
+
+    /* Streak panel wraps tighter */
+    .window-body [style*="display:flex"] {
+        gap: 6px !important;
+    }
+
+    /* Filter buttons wrap */
+    .filter-btn {
+        margin-left: 2px;
+        padding: 2px 6px;
+        font-size: 12px;
+    }
+
+    /* Search bar full width */
+    input[type="text"][style*="width:300px"] {
+        width: 100% !important;
+    }
+
+    /* Window body tighter padding */
+    .window-body {
+        padding: 6px !important;
+    }
+
+    /* Title bar text truncate */
+    .title-bar-text {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: calc(100vw - 80px);
+    }
+}
