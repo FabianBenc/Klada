@@ -198,3 +198,28 @@ th {
         max-width: calc(100vw - 80px);
     }
 }
+@keyframes waveMove {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-20px); }
+}
+
+@keyframes bob {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-0.3px); }
+}
+
+@keyframes panic {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-3deg); }
+    75% { transform: rotate(3deg); }
+}
+
+@keyframes bubbleUp {
+    0% { transform: translateY(0); opacity: 0.5; }
+    100% { transform: translateY(-12px); opacity: 0; }
+}
+
+.wave { animation: waveMove 2s linear infinite; }
+.bob { animation: bob 1.6s ease-in-out infinite; }
+.panic { animation: panic 0.6s infinite; transform-origin: center; }
+.bubble { animation: bubbleUp 2s infinite ease-out; }
