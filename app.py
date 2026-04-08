@@ -77,9 +77,18 @@ def init_db():
         )
     """)
 
-    # Ensure every player has a row
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS win_streaks (
+            player INTEGER PRIMARY KEY,
+            streak INTEGER DEFAULT 0,
+            max_streak INTEGER DEFAULT 0
+        )
+    """)
+
+    # Ensure every player has a row in both tables
     for player_id in PLAYER_NAMES:
         c.execute("INSERT OR IGNORE INTO loss_streaks (player, streak) VALUES (?, 0)", (player_id,))
+        c.execute("INSERT OR IGNORE INTO win_streaks (player, streak, max_streak) VALUES (?, 0, 0)", (player_id,))
 
     conn.commit()
     conn.close()
@@ -271,6 +280,15 @@ def get_loss_streaks():
     return streaks
 
 
+def get_win_streaks():
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT player, streak FROM win_streaks")
+    streaks = {row[0]: row[1] for row in c.fetchall()}
+    conn.close()
+    return streaks
+
+
 def update_ticket_results():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -374,12 +392,62 @@ def index():
         player_names=PLAYER_NAMES,
         admin_logged_in=session.get("admin_logged_in"),
         loss_streaks=get_loss_streaks(),
+        win_streaks=get_win_streaks(),
         normalize_result=normalize_result
     )
 
 @app.route("/pravila")
 def pravila():
     return render_template("pravilaigre.html")
+
+
+@app.route("/chart-data")
+def chart_data():
+    from flask import jsonify
+
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    c.execute("""
+        SELECT ticket_id, ticket_number FROM tickets
+        WHERE ticket_result IS NOT NULL AND ticket_result != 'PENDING'
+        ORDER BY id ASC
+    """)
+    resolved_tickets = c.fetchall()
+
+    labels = []
+    series = {pid: [] for pid in PLAYER_NAMES}
+    totals  = {pid: 0 for pid in PLAYER_NAMES}
+    wins    = {pid: 0 for pid in PLAYER_NAMES}
+
+    for ticket_id, ticket_number in resolved_tickets:
+        labels.append(ticket_number)
+
+        for pid in PLAYER_NAMES:
+            c.execute("""
+                SELECT result FROM bets
+                WHERE ticket_id=? AND player=?
+                AND result NOT IN ('PENDING', 'UNKNOWN')
+                AND result IS NOT NULL
+            """, (ticket_id, pid))
+            results = [r[0] for r in c.fetchall()]
+
+            for r in results:
+                totals[pid] += 1
+                if r in ("WINNING", "VOIDED", "WINNING_VOIDED"):
+                    wins[pid] += 1
+
+            rate = round(wins[pid] / totals[pid] * 100, 1) if totals[pid] > 0 else 0
+            series[pid].append(rate)
+
+    conn.close()
+
+    datasets = [
+        {"label": PLAYER_NAMES[pid], "data": series[pid]}
+        for pid in PLAYER_NAMES
+    ]
+
+    return jsonify({"labels": labels, "datasets": datasets})
 
 
 @app.route("/leaderboard")
@@ -406,6 +474,11 @@ def leaderboard():
         c.execute("SELECT MAX(odds) FROM bets WHERE player=? AND (result='WINNING' OR result='VOIDED')", (player_id,))
         max_win = c.fetchone()[0]
 
+        # Max win streak from win_streaks table
+        c.execute("SELECT max_streak FROM win_streaks WHERE player=?", (player_id,))
+        row = c.fetchone()
+        max_win_streak = row[0] if row else 0
+
         win_rate = (guessed / total * 100) if total > 0 else 0
 
         leaderboard_data.append({
@@ -414,6 +487,7 @@ def leaderboard():
             "win_rate": round(win_rate, 2),
             "avg_odds": round(avg_odds, 2) if avg_odds else 0,
             "max_win": max_win if max_win else 0,
+            "max_win_streak": max_win_streak,
             "guessed": guessed,
             "missed": missed
         })
@@ -470,56 +544,6 @@ def leaderboard():
 
     return render_template("leaderboard.html", data=leaderboard_data, payment_data=payment_data)
 
-
-@app.route("/chart-data")
-def chart_data():
-    from flask import jsonify
-
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-
-    c.execute("""
-        SELECT ticket_id, ticket_number FROM tickets
-        WHERE ticket_result IS NOT NULL AND ticket_result != 'PENDING'
-        ORDER BY id ASC
-    """)
-    resolved_tickets = c.fetchall()
-
-    labels = []
-    series = {pid: [] for pid in PLAYER_NAMES}
-    totals  = {pid: 0 for pid in PLAYER_NAMES}
-    wins    = {pid: 0 for pid in PLAYER_NAMES}
-
-    for ticket_id, ticket_number in resolved_tickets:
-        labels.append(ticket_number)
-
-        for pid in PLAYER_NAMES:
-            c.execute("""
-                SELECT result FROM bets
-                WHERE ticket_id=? AND player=?
-                AND result NOT IN ('PENDING', 'UNKNOWN')
-                AND result IS NOT NULL
-            """, (ticket_id, pid))
-            results = [r[0] for r in c.fetchall()]
-
-            for r in results:
-                totals[pid] += 1
-                if r in ("WINNING", "VOIDED", "WINNING_VOIDED"):
-                    wins[pid] += 1
-
-            rate = round(wins[pid] / totals[pid] * 100, 1) if totals[pid] > 0 else 0
-            series[pid].append(rate)
-
-    conn.close()
-
-    datasets = [
-        {"label": PLAYER_NAMES[pid], "data": series[pid]}
-        for pid in PLAYER_NAMES
-    ]
-
-    return jsonify({"labels": labels, "datasets": datasets})
-
-
 @app.route('/update')
 def update():
     if not session.get('admin_logged_in'):
@@ -531,8 +555,8 @@ def update():
 
 def recalculate_all_streaks():
     """
-    Fully recalculates loss streaks for all players from scratch,
-    replaying tickets in chronological order. Used after a ticket is deleted.
+    Fully recalculates loss and win streaks for all players from scratch,
+    replaying tickets in chronological order.
     """
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -540,38 +564,52 @@ def recalculate_all_streaks():
     # Reset all streaks
     for player_id in PLAYER_NAMES:
         c.execute("INSERT OR REPLACE INTO loss_streaks (player, streak) VALUES (?, 0)", (player_id,))
+        c.execute("INSERT OR REPLACE INTO win_streaks (player, streak, max_streak) VALUES (?, 0, 0)", (player_id,))
 
     # Replay tickets oldest-first
     c.execute("SELECT ticket_id FROM tickets ORDER BY id ASC")
     ticket_ids = [row[0] for row in c.fetchall()]
 
-    streaks = {player_id: 0 for player_id in PLAYER_NAMES}
+    loss_streaks = {player_id: 0 for player_id in PLAYER_NAMES}
+    win_streaks  = {player_id: 0 for player_id in PLAYER_NAMES}
+    max_streaks  = {player_id: 0 for player_id in PLAYER_NAMES}
 
     for ticket_id in ticket_ids:
         for player in PLAYER_NAMES:
             c.execute("SELECT result FROM bets WHERE ticket_id=? AND player=?", (ticket_id, player))
             results = [row[0] for row in c.fetchall()]
 
-            # Player has no legs on this ticket — skip, don't touch their streak
             if not results:
                 continue
 
-            # Legs exist but not all resolved yet — skip
             if any(r in (None, "PENDING", "UNKNOWN") for r in results):
                 continue
 
-            all_losing = all(r == "LOSING" for r in results)
+            all_losing  = all(r == "LOSING" for r in results)
+            all_winning = all(r in ("WINNING", "VOIDED", "WINNING_VOIDED") for r in results)
 
+            # ── Loss streak ──
             if all_losing:
-                if streaks[player] >= 3:
-                    streaks[player] = 1
+                if loss_streaks[player] >= 3:
+                    loss_streaks[player] = 1
                 else:
-                    streaks[player] += 1
+                    loss_streaks[player] += 1
             else:
-                streaks[player] = 0
+                loss_streaks[player] = 0
 
-    for player_id, streak in streaks.items():
-        c.execute("INSERT OR REPLACE INTO loss_streaks (player, streak) VALUES (?, ?)", (player_id, streak))
+            # ── Win streak (no cap) ──
+            if all_winning:
+                win_streaks[player] += 1
+                if win_streaks[player] > max_streaks[player]:
+                    max_streaks[player] = win_streaks[player]
+            else:
+                win_streaks[player] = 0
+
+    for player_id in PLAYER_NAMES:
+        c.execute("INSERT OR REPLACE INTO loss_streaks (player, streak) VALUES (?, ?)",
+                  (player_id, loss_streaks[player_id]))
+        c.execute("INSERT OR REPLACE INTO win_streaks (player, streak, max_streak) VALUES (?, ?, ?)",
+                  (player_id, win_streaks[player_id], max_streaks[player_id]))
 
     conn.commit()
     conn.close()

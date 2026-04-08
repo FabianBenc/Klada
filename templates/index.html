@@ -77,27 +77,118 @@
 
         <hr style="margin-top:0;">
 
-        <!-- Loss Streaks (UNCHANGED) -->
+        <!-- Loss Streaks -->
         <div class="window" style="margin-bottom: 8px;">
             <div class="title-bar">
-                <div class="title-bar-text">🔥 Serije Poraza</div>
+                <div class="title-bar-text">💧 Serije Poraza</div>
             </div>
             <div class="window-body" style="display:flex; flex-wrap:wrap; gap:12px; padding:8px;">
                 {% for player_id, name in player_names.items() %}
                 {% set streak = loss_streaks.get(player_id, 0) %}
                 <div style="display:flex; flex-direction:column; align-items:center; min-width:80px;">
                     <strong style="font-size:0.85em;">{{ name }}</strong>
-                    <div style="display:flex; gap:3px; margin-top:4px;">
-                        {% for i in range(1, 4) %}
-                            {% if i <= streak %}
-                                <span style="font-size:1.3em;">💀</span>
-                            {% else %}
-                                <span style="font-size:1.3em; opacity:0.2;">💀</span>
-                            {% endif %}
-                        {% endfor %}
+                    <div style="margin-top:4px;">
+                        {% if streak == 0 %}
+                        <!-- Safe: person standing, no water -->
+                        <svg width="40" height="52" viewBox="0 0 40 52" xmlns="http://www.w3.org/2000/svg">
+                            <!-- head -->
+                            <circle cx="20" cy="7" r="6" fill="#f5c88a" stroke="#333" stroke-width="1.2"/>
+                            <!-- body -->
+                            <line x1="20" y1="13" x2="20" y2="34" stroke="#333" stroke-width="2"/>
+                            <!-- arms -->
+                            <line x1="20" y1="18" x2="10" y2="26" stroke="#333" stroke-width="2"/>
+                            <line x1="20" y1="18" x2="30" y2="26" stroke="#333" stroke-width="2"/>
+                            <!-- legs -->
+                            <line x1="20" y1="34" x2="13" y2="48" stroke="#333" stroke-width="2"/>
+                            <line x1="20" y1="34" x2="27" y2="48" stroke="#333" stroke-width="2"/>
+                        </svg>
+                        {% elif streak == 1 %}
+                        <!-- 1/3: water up to belt -->
+                        <svg width="40" height="52" viewBox="0 0 40 52" xmlns="http://www.w3.org/2000/svg">
+                            <!-- water fill -->
+                            <rect x="0" y="34" width="40" height="18" fill="#4fc3f7" opacity="0.6" rx="2"/>
+                            <!-- wave top -->
+                            <path d="M0,34 Q5,30 10,34 Q15,38 20,34 Q25,30 30,34 Q35,38 40,34 L40,34 L0,34Z" fill="#29b6f6" opacity="0.8"/>
+                            <!-- head -->
+                            <circle cx="20" cy="7" r="6" fill="#f5c88a" stroke="#333" stroke-width="1.2"/>
+                            <!-- body above water -->
+                            <line x1="20" y1="13" x2="20" y2="34" stroke="#333" stroke-width="2"/>
+                            <!-- arms above water -->
+                            <line x1="20" y1="18" x2="10" y2="26" stroke="#333" stroke-width="2"/>
+                            <line x1="20" y1="18" x2="30" y2="26" stroke="#333" stroke-width="2"/>
+                            <!-- legs submerged (faded) -->
+                            <line x1="20" y1="34" x2="13" y2="48" stroke="#333" stroke-width="2" opacity="0.25"/>
+                            <line x1="20" y1="34" x2="27" y2="48" stroke="#333" stroke-width="2" opacity="0.25"/>
+                        </svg>
+                        {% elif streak == 2 %}
+                        <!-- 2/3: water up to neck -->
+                        <svg width="40" height="52" viewBox="0 0 40 52" xmlns="http://www.w3.org/2000/svg">
+                            <!-- water fill -->
+                            <rect x="0" y="13" width="40" height="39" fill="#1e88e5" opacity="0.6" rx="2"/>
+                            <!-- wave top -->
+                            <path d="M0,13 Q5,9 10,13 Q15,17 20,13 Q25,9 30,13 Q35,17 40,13 L40,13 L0,13Z" fill="#1976d2" opacity="0.8"/>
+                            <!-- head above water -->
+                            <circle cx="20" cy="7" r="6" fill="#f5c88a" stroke="#333" stroke-width="1.2"/>
+                            <!-- desperate arms above water -->
+                            <line x1="20" y1="13" x2="8" y2="8" stroke="#333" stroke-width="2"/>
+                            <line x1="20" y1="13" x2="32" y2="8" stroke="#333" stroke-width="2"/>
+                            <!-- body submerged (faded) -->
+                            <line x1="20" y1="13" x2="20" y2="34" stroke="#333" stroke-width="2" opacity="0.2"/>
+                            <line x1="20" y1="34" x2="13" y2="48" stroke="#333" stroke-width="2" opacity="0.2"/>
+                            <line x1="20" y1="34" x2="27" y2="48" stroke="#333" stroke-width="2" opacity="0.2"/>
+                        </svg>
+                        {% elif streak >= 3 %}
+                        <!-- 3/3: fully submerged -->
+                        <svg width="40" height="52" viewBox="0 0 40 52" xmlns="http://www.w3.org/2000/svg">
+                            <!-- full water -->
+                            <rect x="0" y="0" width="40" height="52" fill="#0d47a1" opacity="0.65" rx="2"/>
+                            <!-- bubbles -->
+                            <circle cx="24" cy="5" r="2" fill="white" opacity="0.5"/>
+                            <circle cx="18" cy="9" r="1.5" fill="white" opacity="0.4"/>
+                            <circle cx="27" cy="11" r="1" fill="white" opacity="0.3"/>
+                            <!-- submerged person (all faded) -->
+                            <circle cx="20" cy="13" r="6" fill="#f5c88a" stroke="#333" stroke-width="1.2" opacity="0.3"/>
+                            <line x1="20" y1="19" x2="20" y2="36" stroke="#333" stroke-width="2" opacity="0.3"/>
+                            <line x1="20" y1="24" x2="10" y2="32" stroke="#333" stroke-width="2" opacity="0.3"/>
+                            <line x1="20" y1="24" x2="30" y2="32" stroke="#333" stroke-width="2" opacity="0.3"/>
+                            <line x1="20" y1="36" x2="13" y2="50" stroke="#333" stroke-width="2" opacity="0.3"/>
+                            <line x1="20" y1="36" x2="27" y2="50" stroke="#333" stroke-width="2" opacity="0.3"/>
+                        </svg>
+                        {% endif %}
                     </div>
                     <small style="margin-top:2px; color: {% if streak == 3 %}red{% elif streak == 2 %}orange{% elif streak == 1 %}goldenrod{% else %}gray{% endif %};">
-                        {% if streak == 0 %}Siguran{% elif streak == 3 %}KAZNA!{% else %}{{ streak }}/3{% endif %}
+                        {% if streak == 0 %}Na Suhom{% elif streak == 1 %}Do Pojasa{% elif streak == 2 %}Do Grla{% elif streak >= 3 %}Utopljen!{% else %}{{ streak }}/3{% endif %}
+                    </small>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Win Streaks -->
+        <div class="window" style="margin-bottom: 8px;">
+            <div class="title-bar">
+                <div class="title-bar-text">🔥 Serije Pobjeda</div>
+            </div>
+            <div class="window-body" style="display:flex; flex-wrap:wrap; gap:12px; padding:8px;">
+                {% for player_id, name in player_names.items() %}
+                {% set wstreak = win_streaks.get(player_id, 0) %}
+                <div style="display:flex; flex-direction:column; align-items:center; min-width:80px;">
+                    <strong style="font-size:0.85em;">{{ name }}</strong>
+                    <div style="margin-top:4px; font-size:1.6em; line-height:1;">
+                        {% if wstreak == 0 %}
+                            <span style="opacity:0.25;">🔥</span>
+                        {% elif wstreak <= 2 %}
+                            🔥
+                        {% elif wstreak <= 4 %}
+                            🔥🔥
+                        {% elif wstreak <= 6 %}
+                            🔥🔥🔥
+                        {% else %}
+                            🔥🔥🔥🔥
+                        {% endif %}
+                    </div>
+                    <small style="margin-top:2px; color: {% if wstreak == 0 %}gray{% elif wstreak <= 2 %}goldenrod{% elif wstreak <= 4 %}orange{% else %}red{% endif %};">
+                        {% if wstreak == 0 %}–{% else %}{{ wstreak }} zaredom{% endif %}
                     </small>
                 </div>
                 {% endfor %}

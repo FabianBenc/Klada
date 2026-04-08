@@ -45,6 +45,7 @@
                         <th>%</th>
                         <th class="hide-mobile">Prosj. tečaj (pogođeni)</th>
                         <th class="hide-mobile">Najveci pogodeni tecaj</th>
+                        <th>🔥 Naj. niz</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -63,6 +64,7 @@
                         <td>{{ player.win_rate }}%</td>
                         <td class="hide-mobile">{{ player.avg_odds }}</td>
                         <td class="hide-mobile">{{ player.max_win }}</td>
+                        <td>{% if player.max_win_streak > 0 %}{{ player.max_win_streak }} 🔥{% else %}–{% endif %}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
