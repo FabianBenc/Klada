@@ -165,35 +165,61 @@
         </div>
 
         <!-- Win Streaks -->
-        <div class="window" style="margin-bottom: 8px;">
-            <div class="title-bar">
-                <div class="title-bar-text">🔥 Serije Pobjeda</div>
+        <style>
+@keyframes pulse {
+    0%   { transform: scale(1); }
+    50%  { transform: scale(1.25); }
+    100% { transform: scale(1); }
+}
+
+.streak-emoji {
+    display: inline-block;
+    animation: pulse 1.2s infinite ease-in-out;
+}
+</style>
+
+<div class="window" style="margin-bottom: 8px;">
+    <div class="title-bar">
+        <div class="title-bar-text">🟢 Serije Pobjeda</div>
+    </div>
+
+    <div class="window-body" style="display:flex; flex-wrap:wrap; gap:12px; padding:8px;">
+        {% for player_id, name in player_names.items() %}
+        {% set wstreak = win_streaks.get(player_id, 0) %}
+
+        {# dynamic emoji size: shrinks as streak grows #}
+        {% set size = 1.6 - (wstreak * 0.05) %}
+        {% if size < 0.6 %}{% set size = 0.6 %}{% endif %}
+
+        <div style="display:flex; flex-direction:column; align-items:center; min-width:80px;">
+            <strong style="font-size:0.85em;">{{ name }}</strong>
+
+            <div style="margin-top:4px; line-height:1; font-size: {{ size }}em;">
+                {% if wstreak == 0 %}
+                    <span style="opacity:0.25;">🟢</span>
+                {% else %}
+                    {% for i in range(wstreak) %}
+                        <span class="streak-emoji" style="animation-delay: {{ i * 0.1 }}s;">🟢</span>
+                    {% endfor %}
+                {% endif %}
             </div>
-            <div class="window-body" style="display:flex; flex-wrap:wrap; gap:12px; padding:8px;">
-                {% for player_id, name in player_names.items() %}
-                {% set wstreak = win_streaks.get(player_id, 0) %}
-                <div style="display:flex; flex-direction:column; align-items:center; min-width:80px;">
-                    <strong style="font-size:0.85em;">{{ name }}</strong>
-                    <div style="margin-top:4px; font-size:1.6em; line-height:1;">
-                        {% if wstreak == 0 %}
-                            <span style="opacity:0.25;">🔥</span>
-                        {% elif wstreak <= 2 %}
-                            🔥
-                        {% elif wstreak <= 4 %}
-                            🔥🔥
-                        {% elif wstreak <= 6 %}
-                            🔥🔥🔥
-                        {% else %}
-                            🔥🔥🔥🔥
-                        {% endif %}
-                    </div>
-                    <small style="margin-top:2px; color: {% if wstreak == 0 %}gray{% elif wstreak <= 2 %}goldenrod{% elif wstreak <= 4 %}orange{% else %}red{% endif %};">
-                        {% if wstreak == 0 %}–{% else %}{{ wstreak }} zaredom{% endif %}
-                    </small>
-                </div>
-                {% endfor %}
-            </div>
+
+            <small style="margin-top:2px;
+                color: {% if wstreak == 0 %}gray
+                       {% elif wstreak <= 2 %}green
+                       {% elif wstreak <= 5 %}limegreen
+                       {% else %}darkgreen
+                       {% endif %};">
+                {% if wstreak == 0 %}
+                    –
+                {% else %}
+                    {{ wstreak }} zaredom
+                {% endif %}
+            </small>
         </div>
+        {% endfor %}
+    </div>
+</div>
 
         <!-- SEARCH + FILTER -->
         <div class="field-row" style="margin-bottom:10px;">
