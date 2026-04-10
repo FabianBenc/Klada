@@ -98,10 +98,20 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for row in payment_data %}
-                    <tr>
-                        <td>{{ row.name }}</td>
-                        <td><strong style="color:red;">€{{ "%.2f"|format(row.total_paid) }}</strong></td>
+                    {% set sorted_payments = payment_data | sort(attribute='total_paid', reverse=true) %}
+                    {% set max_paid = sorted_payments[0].total_paid if sorted_payments else 0 %}
+
+                    {% for row in sorted_payments %}
+                    <tr {% if row.total_paid == max_paid %}style="background:#ffd70033; font-weight:bold;"{% endif %}>
+                        <td>
+                            {{ row.name }}
+                            {% if row.total_paid == max_paid %}{% endif %}
+                        </td>
+                        <td>
+                            <strong style="color:red;">
+                                €{{ "%.2f"|format(row.total_paid) }}
+                            </strong>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
