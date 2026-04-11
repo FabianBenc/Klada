@@ -3,37 +3,43 @@
 <head>
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='icon.png') }}">
     <meta charset="UTF-8">
-    <title>Pravila Igre – Propali Kladionicari</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pravila Igre – Propali Kladioničari</title>
 
-    <link rel="stylesheet" href="https://unpkg.com/@sakun/system.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
 </head>
 
 <body>
 <div class="window">
-    <div class="title-bar">
-        <div class="title-bar-text">📜 Pravila Igre – Ugovor o Grupnom Sportskom Klađenju</div>
+    <div class="title-bar" style="padding:12px 18px;">
+        <div class="title-bar-text"><span class="app-title">Pravila Igre</span></div>
     </div>
 
-    <!-- Win98 Menu Bar -->
     <div class="menu-bar">
         <div class="menu-item" onclick="this.querySelector('.dropdown').style.display = this.querySelector('.dropdown').style.display === 'flex' ? 'none' : 'flex'">
-            Navigacija
+            ☰ Navigacija
             <div class="dropdown" style="display:none;">
                 <a href="/">⬅ Natrag na početnu</a>
-                <a href="/leaderboard">🏆 Poredak</a>
-                <a href="/login">🔑 Admin prijava</a>
+                <a href="/leaderboard">Poredak</a>
+                <a href="/login">Admin prijava</a>
             </div>
         </div>
     </div>
 
     <div class="window-body">
-        <p style="margin-top:0;"><em>Ovaj ugovor definira pravila zajedničkog sportskog klađenja između sudionika.</em></p>
+        <p style="margin-top:0; margin-bottom:16px;"><em>Ovaj ugovor definira pravila zajedničkog sportskog klađenja između sudionika.</em></p>
 
         <hr>
 
+        {% set articles = [
+            ("Članak 1. – Sudionici", "Sudionici ugovora su svi korisnici koji sudjeluju u grupnom sportskom klađenju i prihvaćaju ova pravila."),
+        ] %}
+
         <!-- Članak 1 -->
-        <div class="window" style="margin-bottom:12px;">
+        <div class="window" style="margin-bottom:10px;">
             <div class="title-bar"><div class="title-bar-text">Članak 1. – Sudionici</div></div>
             <div class="window-body">
                 <p>Sudionici ugovora su svi korisnici koji sudjeluju u grupnom sportskom klađenju i prihvaćaju ova pravila.</p>
@@ -41,7 +47,7 @@
         </div>
 
         <!-- Članak 2 -->
-        <div class="window" style="margin-bottom:12px;">
+        <div class="window" style="margin-bottom:10px;">
             <div class="title-bar"><div class="title-bar-text">Članak 2. – Način igranja</div></div>
             <div class="window-body">
                 <ol>
@@ -54,7 +60,7 @@
         </div>
 
         <!-- Članak 3 -->
-        <div class="window" style="margin-bottom:12px;">
+        <div class="window" style="margin-bottom:10px;">
             <div class="title-bar"><div class="title-bar-text">Članak 3. – Ulog</div></div>
             <div class="window-body">
                 <ol>
@@ -65,41 +71,31 @@
         </div>
 
         <!-- Članak 4 -->
-        <div class="window" style="margin-bottom:12px;">
+        <div class="window" style="margin-bottom:10px;">
             <div class="title-bar"><div class="title-bar-text">Članak 4. – Promašaji i pokrivanje sljedećeg tiketa</div></div>
             <div class="window-body">
                 <ol>
                     <li>Korisnik koji promaši jedan ili oba svoja para smatra se <strong>gubitnikom</strong> tog tiketa.</li>
                     <li>Gubitnici financiraju sljedeći tiket:
-                        <table style="margin-top:8px; width:auto;">
-                            <thead>
-                                <tr>
-                                    <th>Broj gubitnika</th>
-                                    <th>Tko plaća</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>1 korisnik promaši</td>
-                                    <td>Plaća puni tiket</td>
-                                </tr>
-                                <tr>
-                                    <td>2 korisnika promaše</td>
-                                    <td>Dijele iznos jednako</td>
-                                </tr>
-                                <tr>
-                                    <td>Više korisnika promaši</td>
-                                    <td>Iznos se dijeli jednako</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                        <div class="table-wrap" style="margin-top:10px;">
+                            <table style="width:auto;">
+                                <thead>
+                                    <tr><th>Broj gubitnika</th><th>Tko plaća</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td>1 korisnik promaši</td><td>Plaća puni tiket</td></tr>
+                                    <tr><td>2 korisnika promaše</td><td>Dijele iznos jednako</td></tr>
+                                    <tr><td>Više korisnika promaši</td><td>Iznos se dijeli jednako</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </li>
                 </ol>
             </div>
         </div>
 
         <!-- Članak 5 -->
-        <div class="window" style="margin-bottom:12px;">
+        <div class="window" style="margin-bottom:10px;">
             <div class="title-bar"><div class="title-bar-text">Članak 5. – Vrijeme igranja</div></div>
             <div class="window-body">
                 <p>Tiket se igra tijekom <strong>radnog tjedna</strong> ako se ima što za igrati i <strong>vikendom</strong>.</p>
@@ -107,7 +103,7 @@
         </div>
 
         <!-- Članak 6 -->
-        <div class="window" style="margin-bottom:12px;">
+        <div class="window" style="margin-bottom:10px;">
             <div class="title-bar"><div class="title-bar-text">Članak 6. – Prestanak sudjelovanja</div></div>
             <div class="window-body">
                 <p>Korisnik koji želi prestati sudjelovati mora prije izlaska <strong>podmiriti sve postojeće dugove</strong>.</p>
@@ -115,7 +111,7 @@
         </div>
 
         <!-- Članak 7 -->
-        <div class="window" style="margin-bottom:12px;">
+        <div class="window" style="margin-bottom:10px;">
             <div class="title-bar"><div class="title-bar-text">Članak 7. – Dobitak</div></div>
             <div class="window-body">
                 <ol>
@@ -127,7 +123,7 @@
         </div>
 
         <!-- Članak 8 -->
-        <div class="window" style="margin-bottom:12px;">
+        <div class="window" style="margin-bottom:10px;">
             <div class="title-bar"><div class="title-bar-text">Članak 8. – Prevelik broj promašaja</div></div>
             <div class="window-body">
                 <p>U slučaju prevelikog broja promašenih tiketa, prema dogovoru sudionika, broj parova po korisniku može se smanjiti s <strong>2 na 1</strong>.</p>
@@ -135,7 +131,7 @@
         </div>
 
         <!-- Članak 9 -->
-        <div class="window" style="margin-bottom:12px;">
+        <div class="window" style="margin-bottom:10px;">
             <div class="title-bar"><div class="title-bar-text">Članak 9. – Kaznene odredbe ⚠️</div></div>
             <div class="window-body">
                 <p>Ako korisnik promaši oba para <strong>3 tiketa zaredom</strong>, dužan je <strong>sam platiti puni tiket</strong> u 4. tjednu igre.</p>
@@ -143,7 +139,7 @@
         </div>
 
         <!-- Članak 10 -->
-        <div class="window" style="margin-bottom:12px;">
+        <div class="window" style="margin-bottom:10px;">
             <div class="title-bar"><div class="title-bar-text">Članak 10. – Evidentiranje igre</div></div>
             <div class="window-body">
                 <p>Igranje tiketa i dugovanja će se evidentirati u tablici.</p>
@@ -151,7 +147,7 @@
         </div>
 
         <!-- Članak 11 -->
-        <div class="window" style="margin-bottom:12px;">
+        <div class="window" style="margin-bottom:10px;">
             <div class="title-bar"><div class="title-bar-text">Članak 11. – Završne odredbe</div></div>
             <div class="window-body">
                 <p>Sudjelovanjem u igri smatra se da su svi korisnici u cijelosti prihvatili ovaj ugovor.</p>

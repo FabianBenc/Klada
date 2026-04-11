@@ -1,24 +1,26 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="hr">
 <head>
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='icon.png') }}">
     <meta charset="UTF-8">
-    <title>Admin Login – Propali Kladionicari</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login – Propali Kladioničari</title>
 
-    <link rel="stylesheet" href="https://unpkg.com/@sakun/system.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
-<div class="window" style="max-width: 340px; margin: 60px auto;">
-    <div class="title-bar">
-        <div class="title-bar-text">🔑 Admin Login</div>
+<div class="window" style="max-width: 360px; margin: 80px auto;">
+    <div class="title-bar" style="padding:12px 18px;">
+        <div class="title-bar-text"><span style="font-family:'Bebas Neue'; letter-spacing:2px; font-size:16px;">🔑 Admin Login</span></div>
     </div>
 
-    <!-- Win98 Menu Bar -->
     <div class="menu-bar">
-        <div class="menu-item" style="position:relative;" onclick="this.querySelector('.dropdown').style.display = this.querySelector('.dropdown').style.display === 'flex' ? 'none' : 'flex'">
-            Navigacija
+        <div class="menu-item" onclick="this.querySelector('.dropdown').style.display = this.querySelector('.dropdown').style.display === 'flex' ? 'none' : 'flex'">
+            ☰ Navigacija
             <div class="dropdown" style="display:none;">
                 <a href="/">⬅ Natrag na početnu</a>
                 <a href="/leaderboard">🏆 Poredak</a>
@@ -26,34 +28,35 @@
         </div>
     </div>
 
-    <div class="window-body">
-        <p style="margin-top:0;"><strong>Unesite administratorske podatke.</strong></p>
+    <div class="window-body" style="padding:24px;">
+        <p style="margin-bottom:20px; color:var(--text-muted);">Unesite administratorske podatke.</p>
 
         {% if error %}
-        <p style="color:red; margin:0 0 8px 0;">⚠ {{ error }}</p>
+        <div style="background:rgba(255,68,68,0.12); border:1px solid rgba(255,68,68,0.3); border-radius:6px; padding:10px 14px; margin-bottom:16px; color:var(--red); font-size:13px;">
+            ⚠ {{ error }}
+        </div>
         {% endif %}
 
         <form method="POST">
-            <div class="field-row-stacked" style="margin-bottom:8px;">
+            <div class="field-row-stacked">
                 <label for="username">Korisničko ime</label>
                 <input type="text" id="username" name="username" placeholder="admin" required>
             </div>
 
-            <div class="field-row-stacked" style="margin-bottom:12px;">
+            <div class="field-row-stacked" style="margin-bottom:20px;">
                 <label for="password">Lozinka</label>
                 <input type="password" id="password" name="password" placeholder="••••••••" required>
             </div>
 
-            <div class="field-row" style="justify-content:flex-end; gap:6px;">
-                <a href="/"><button type="button">Odustani</button></a>
-                <button type="submit">Prijava</button>
+            <div style="display:flex; justify-content:flex-end; gap:8px;">
+                <a href="/"><button type="button" style="background:var(--surface3); color:var(--text); border:1px solid var(--border) !important;">Odustani</button></a>
+                <button type="submit">Prijava →</button>
             </div>
         </form>
     </div>
 </div>
 
 <script>
-    // Close dropdowns when clicking outside
     document.addEventListener('click', function(e) {
         document.querySelectorAll('.dropdown').forEach(d => {
             if (!d.parentElement.contains(e.target)) d.style.display = 'none';
