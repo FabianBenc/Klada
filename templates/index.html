@@ -86,6 +86,62 @@
         </div>
     </div>
 
+    <!-- Player Management Panel (admin only) -->
+    <div x-show="admin_logged_in" class="window" style="margin:10px; border-radius:8px;">
+        <div class="title-bar" style="padding:8px 14px; cursor:pointer;" @click="playersOpen = !playersOpen">
+            <div class="title-bar-text" style="font-size:13px;">👥 Upravljanje igračima</div>
+            <span style="margin-left:auto; color:var(--text-muted); font-size:12px;" x-text="playersOpen ? '▲ Zatvori' : '▼ Otvori'"></span>
+        </div>
+        <div class="window-body" x-show="playersOpen" style="padding:12px 14px;">
+
+            <!-- Current players list -->
+            <div style="margin-bottom:14px;">
+                <p style="font-size:12px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.8px; margin-bottom:8px;">Aktivni igrači (sljedeći tiket)</p>
+                <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+                    {% for player in all_players %}
+                    {% if player.active %}
+                    <div style="display:flex; align-items:center; gap:6px; background:var(--surface2); border:1px solid var(--border); border-radius:20px; padding:4px 10px 4px 12px;">
+                        <div>
+                            <span style="font-size:13px; font-weight:500; color:var(--green);">{{ player.name }}</span>
+                            <span style="font-size:10px; color:var(--text-muted); display:block; line-height:1.2;">od {{ player.joined_at[:10] }}</span>
+                        </div>
+                        <form method="POST" action="/remove_player/{{ player.id }}" style="display:inline;" onsubmit="return confirm('Ukloniti {{ player.name }}? Svi prethodni tiketi ostaju netaknuti.')">
+                            <button type="submit" style="background:transparent !important; border:none !important; color:var(--red); font-size:14px; padding:0 2px; line-height:1; cursor:pointer; box-shadow:none !important; min-width:0;">✕</button>
+                        </form>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+
+                {% set inactive_players = all_players | selectattr('active', 'equalto', 0) | list %}
+                {% if inactive_players %}
+                <p style="font-size:12px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.8px; margin-bottom:8px; margin-top:14px;">Neaktivni igrači</p>
+                <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+                    {% for player in inactive_players %}
+                    <div style="display:flex; align-items:center; gap:6px; background:var(--surface2); border:1px solid var(--border); border-radius:20px; padding:4px 10px 4px 12px; opacity:0.6;">
+                        <span style="font-size:13px; font-weight:500; color:var(--text-muted);">{{ player.name }}</span>
+                        <form method="POST" action="/add_player" style="display:inline;">
+                            <input type="hidden" name="player_name" value="{{ player.name }}">
+                            <button type="submit" style="background:transparent !important; border:none !important; color:var(--green); font-size:14px; padding:0 2px; line-height:1; cursor:pointer; box-shadow:none !important; min-width:0;" title="Reaktiviraj">↩</button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Add new player -->
+            <form method="POST" action="/add_player" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; border-top:1px solid var(--border); padding-top:12px;">
+                <input type="text" name="player_name" placeholder="Ime novog igrača" required
+                       style="flex:1; min-width:160px;">
+                <button type="submit" style="white-space:nowrap; background:var(--green) !important; color:#000 !important;">+ Dodaj igrača</button>
+            </form>
+            <p style="margin-top:8px; font-size:11px; color:var(--text-muted);">
+                ℹ️ Novi igrač plaća €1 za sebe pri prvom tiketu na kojemu sudjeluje. Datum dodavanja određuje od kojeg tiketa igrač sudjeluje — tiketi odigrani <em>prije</em> tog datuma automatski ga isključuju, čak i pri ponovnom uvozu tiketa.
+            </p>
+        </div>
+    </div>
+
     <div class="window-body">
 
         <!-- ── Loss Streaks ── -->
@@ -532,6 +588,7 @@ function ticketApp() {
         search: '',
         filter: 'ALL',
         loginModal: false,
+        playersOpen: false,
         admin_logged_in: {{ 'true' if admin_logged_in else 'false' }},
 
         filterTicket(text, status) {
