@@ -474,8 +474,10 @@
                             <tr>
                                 <th>Igrač</th>
                                 <th>Par</th>
+                                <th class="hide-mobile">Početak</th>
                                 <th>Tečaj</th>
-                                <th>Rezultat</th>
+                                <th class="hide-mobile">Rezultat utakmice</th>
+                                <th>Ishod</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -484,11 +486,14 @@
                             <tr>
                                 <td x-html="highlight('{{ player_names.get(bet[1], 'Unknown') }}')"></td>
                                 <td x-html="highlight('{{ bet[2] }}')"></td>
+                                <td class="hide-mobile" style="color:var(--text-muted); font-size:12px;">{{ bet[6] or '–' }}</td>
                                 <td>{{ bet[3] }}</td>
+                                <td class="hide-mobile" style="font-weight:600; color:var(--accent2);">{{ bet[7] or '–' }}</td>
                                 {% set leg_result = normalize_result(bet[4]) %}
                                 <td class="{{ leg_result }}">
                                     {% if leg_result == 'WINNING' %}✅ Pogodak
                                     {% elif leg_result == 'LOSING' %}❌ Promašaj
+                                    {% elif leg_result == 'VOIDED' %}🔘 Void
                                     {% else %}⏳ U tijeku
                                     {% endif %}
                                 </td>
@@ -507,8 +512,10 @@
                                 <tr>
                                     <th>Igrač</th>
                                     <th>Par</th>
+                                    <th class="hide-mobile">Početak</th>
                                     <th>Tečaj</th>
-                                    <th>Rezultat</th>
+                                    <th class="hide-mobile">Rezultat utakmice</th>
+                                    <th>Ishod</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -523,11 +530,14 @@
                                         </select>
                                     </td>
                                     <td>{{ bet[2] }}</td>
+                                    <td class="hide-mobile" style="color:var(--text-muted); font-size:12px;">{{ bet[6] or '–' }}</td>
                                     <td>{{ bet[3] }}</td>
+                                    <td class="hide-mobile" style="font-weight:600; color:var(--accent2);">{{ bet[7] or '–' }}</td>
                                     {% set leg_result = normalize_result(bet[4]) %}
                                     <td class="{{ leg_result }}">
                                         {% if leg_result == 'WINNING' %}✅ Pogodak
                                         {% elif leg_result == 'LOSING' %}❌ Promašaj
+                                        {% elif leg_result == 'VOIDED' %}🔘 Void
                                         {% else %}⏳ U tijeku
                                         {% endif %}
                                     </td>

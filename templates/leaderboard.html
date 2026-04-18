@@ -33,6 +33,11 @@
     <div class="window-body">
 
         <h3>Tablica zlatnih, srebrnih i broncanih</h3>
+        <p style="font-size:12px; margin-bottom:12px; color:var(--text-muted);">
+            Poredak: <strong style="color:var(--text);">1.</strong> % pogodaka &nbsp;›&nbsp;
+            <strong style="color:var(--text);">2.</strong> prosječni tečaj &nbsp;›&nbsp;
+            <strong style="color:var(--text);">3.</strong> manje void parova. Void parovi se <em>ne</em> računaju u win rate.
+        </p>
 
         <div class="table-wrap">
             <table>
@@ -45,6 +50,7 @@
                         <th>%</th>
                         <th class="hide-mobile">Prosj. tečaj</th>
                         <th class="hide-mobile">Najveći tečaj</th>
+                        <th class="hide-mobile" title="Broj void parova">🔘 Void</th>
                         <th>🔥 Niz</th>
                     </tr>
                 </thead>
@@ -64,6 +70,7 @@
                         <td style="font-weight:600;">{{ player.win_rate }}%</td>
                         <td class="hide-mobile" style="color:var(--text-muted);">{{ player.avg_odds }}</td>
                         <td class="hide-mobile" style="color:var(--accent);">{{ player.max_win }}</td>
+                        <td class="hide-mobile" style="color:var(--text-muted);">{% if player.voided > 0 %}<span style="color:var(--gold);">{{ player.voided }}</span>{% else %}–{% endif %}</td>
                         <td>{% if player.max_win_streak > 0 %}<span style="color:var(--gold);">{{ player.max_win_streak }} 🔥</span>{% else %}<span style="color:var(--text-muted);">–</span>{% endif %}</td>
                     </tr>
                     {% endfor %}

@@ -135,9 +135,19 @@ def init_db():
             player INTEGER,
             fixture_name TEXT,
             odds REAL,
-            result TEXT
+            result TEXT,
+            start_time TEXT,
+            score TEXT
         )
     """)
+
+    # Migrate existing bets tables that predate start_time / score columns
+    c.execute("PRAGMA table_info(bets)")
+    bet_cols = [r[1] for r in c.fetchall()]
+    if "start_time" not in bet_cols:
+        c.execute("ALTER TABLE bets ADD COLUMN start_time TEXT")
+    if "score" not in bet_cols:
+        c.execute("ALTER TABLE bets ADD COLUMN score TEXT")
 
     c.execute("PRAGMA table_info(tickets)")
     columns = [row[1] for row in c.fetchall()]
@@ -227,8 +237,10 @@ def parse_psk_date(iso_string):
 
 
 def normalize_result(api_result):
-    if api_result in ("WINNING", "WINNING_VOIDED", "VOIDED"):
+    if api_result == "WINNING":
         return "WINNING"
+    if api_result in ("VOIDED", "WINNING_VOIDED"):
+        return "VOIDED"
     if api_result == "LOSING":
         return "LOSING"
     return "PENDING"
@@ -288,10 +300,31 @@ def save_ticket(ticket_number, data):
     for index, leg in enumerate(legs):
         player_index = min(index // legs_per_player, len(player_ids) - 1)
         player = player_ids[player_index]
+        # Start time is a top-level field on the leg
+        raw_start = leg.get("startTime") or ""
+        start_time = parse_psk_date(raw_start) if raw_start else None
+        # Outcome result: markets[0].outcomeResult  → e.g. "3 : 2"
+        # Selection name: markets[0].selections[0].name  → e.g. "1", "X", "Over 2.5"
+        market = (leg.get("markets") or [None])[0] or {}
+        outcome_result = market.get("outcomeResult") or None          # "3 : 2"
+        selection_name = None
+        selections = market.get("selections") or []
+        if selections:
+            selection_name = selections[0].get("name") or None        # "1"
+        # Store as "1 (3:2)" — outcome picked + final score
+        if outcome_result and selection_name:
+            score = f"{selection_name} ({outcome_result})"
+        elif selection_name:
+            score = selection_name
+        elif outcome_result:
+            score = outcome_result
+        else:
+            score = None
         c.execute("""
-            INSERT INTO bets (ticket_id, player, fixture_name, odds, result)
-            VALUES (?, ?, ?, ?, ?)
-        """, (ticket_id, player, leg.get("fixtureName"), leg.get("oddsPlaced"), leg.get("result")))
+            INSERT INTO bets (ticket_id, player, fixture_name, odds, result, start_time, score)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (ticket_id, player, leg.get("fixtureName"), leg.get("oddsPlaced"),
+              leg.get("result"), start_time, score))
 
     conn.commit()
     update_loss_streaks(ticket_id, conn)
@@ -426,10 +459,26 @@ def update_ticket_results():
         if not data:
             continue
         for leg in data.get("legs", []):
+            raw_start = leg.get("startTime") or ""
+            start_time = parse_psk_date(raw_start) if raw_start else None
+            market = (leg.get("markets") or [None])[0] or {}
+            outcome_result = market.get("outcomeResult") or None
+            selection_name = None
+            selections = market.get("selections") or []
+            if selections:
+                selection_name = selections[0].get("name") or None
+            if outcome_result and selection_name:
+                score = f"{selection_name} ({outcome_result})"
+            elif selection_name:
+                score = selection_name
+            elif outcome_result:
+                score = outcome_result
+            else:
+                score = None
             c.execute("""
-                UPDATE bets SET result=?
+                UPDATE bets SET result=?, start_time=COALESCE(?, start_time), score=COALESCE(?, score)
                 WHERE ticket_id=? AND fixture_name=?
-            """, (leg.get("result"), ticket_id, leg.get("fixtureName")))
+            """, (leg.get("result"), start_time, score, ticket_id, leg.get("fixtureName")))
         c.execute("""
             UPDATE tickets SET last_updated=?, ticket_result=?
             WHERE ticket_id=?
@@ -552,7 +601,7 @@ def index():
     tickets = c.fetchall()
 
     c.execute("""
-        SELECT ticket_id, player, fixture_name, odds, result, id
+        SELECT ticket_id, player, fixture_name, odds, result, id, start_time, score
         FROM bets ORDER BY ticket_id, player
     """)
     bets = c.fetchall()
@@ -662,13 +711,13 @@ def chart_data():
             c.execute("""
                 SELECT result FROM bets
                 WHERE ticket_id=? AND player=?
-                AND result NOT IN ('PENDING', 'UNKNOWN')
+                AND result NOT IN ('PENDING', 'UNKNOWN', 'VOIDED', 'WINNING_VOIDED')
                 AND result IS NOT NULL
             """, (ticket_id, pid))
             results = [r[0] for r in c.fetchall()]
             for r in results:
                 totals[pid] += 1
-                if r in ("WINNING", "VOIDED", "WINNING_VOIDED"):
+                if r == "WINNING":
                     wins[pid] += 1
             rate = round(wins[pid] / totals[pid] * 100, 1) if totals[pid] > 0 else 0
             series[pid].append(rate)
@@ -691,19 +740,23 @@ def leaderboard():
     leaderboard_data = []
 
     for player_id, name in PLAYER_NAMES.items():
-        c.execute("SELECT COUNT(*) FROM bets WHERE player=? AND result NOT IN ('UNKNOWN','PENDING') AND result IS NOT NULL", (player_id,))
+        # Total resolved legs (exclude VOIDED from win-rate denominator)
+        c.execute("SELECT COUNT(*) FROM bets WHERE player=? AND result NOT IN ('UNKNOWN','PENDING','VOIDED','WINNING_VOIDED') AND result IS NOT NULL", (player_id,))
         total = c.fetchone()[0]
 
-        c.execute("SELECT COUNT(*) FROM bets WHERE player=? AND result IN ('WINNING','VOIDED')", (player_id,))
+        c.execute("SELECT COUNT(*) FROM bets WHERE player=? AND result='WINNING'", (player_id,))
         guessed = c.fetchone()[0]
 
         c.execute("SELECT COUNT(*) FROM bets WHERE player=? AND result='LOSING'", (player_id,))
         missed = c.fetchone()[0]
 
-        c.execute("SELECT AVG(odds) FROM bets WHERE player=? AND result IN ('WINNING','VOIDED')", (player_id,))
+        c.execute("SELECT COUNT(*) FROM bets WHERE player=? AND result IN ('VOIDED','WINNING_VOIDED')", (player_id,))
+        voided = c.fetchone()[0]
+
+        c.execute("SELECT AVG(odds) FROM bets WHERE player=? AND result='WINNING'", (player_id,))
         avg_odds = c.fetchone()[0]
 
-        c.execute("SELECT MAX(odds) FROM bets WHERE player=? AND result IN ('WINNING','VOIDED')", (player_id,))
+        c.execute("SELECT MAX(odds) FROM bets WHERE player=? AND result='WINNING'", (player_id,))
         max_win = c.fetchone()[0]
 
         c.execute("SELECT max_streak FROM win_streaks WHERE player=?", (player_id,))
@@ -719,7 +772,8 @@ def leaderboard():
             "max_win": max_win if max_win else 0,
             "max_win_streak": max_win_streak,
             "guessed": guessed,
-            "missed": missed
+            "missed": missed,
+            "voided": voided,
         })
 
     # ── Payment calculation ───────────────────────────────────────────────────
@@ -794,7 +848,7 @@ def leaderboard():
 
     conn.close()
 
-    leaderboard_data.sort(key=lambda x: (x["win_rate"], x["avg_odds"]), reverse=True)
+    leaderboard_data.sort(key=lambda x: (x["win_rate"], x["avg_odds"], -x["voided"]), reverse=True)
 
     payment_data = [
         {"name": row["name"], "total_paid": round(payments[row["player_id"]], 2)}
