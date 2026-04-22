@@ -11,6 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
     <style>
         .tab-bar {
@@ -89,22 +90,22 @@
                 <tr>
                     <th>#</th>
                     <th>Igrač</th>
-                    <th>✅</th>
-                    <th>❌</th>
+                    <th><i data-lucide="check-circle-2" style="width:13px;height:13px;color:#4ade80;vertical-align:middle;"></i></th>
+                    <th><i data-lucide="x-circle" style="width:13px;height:13px;color:var(--red);vertical-align:middle;"></i></th>
                     <th>%</th>
                     <th class="hide-mobile">Prosj. tečaj</th>
                     <th class="hide-mobile">Najveći tečaj</th>
-                    <th class="hide-mobile" title="Broj void parova">🔘 Void</th>
-                    <th>🔥 Niz</th>
+                    <th class="hide-mobile" title="Broj void parova"><i data-lucide="minus-circle" style="width:13px;height:13px;color:var(--text-muted);vertical-align:middle;margin-right:3px;"></i>Void</th>
+                    <th><i data-lucide="flame" style="width:13px;height:13px;color:var(--accent);vertical-align:middle;margin-right:3px;"></i>Niz</th>
                 </tr>
             </thead>
             <tbody>
                 {% for player in rows %}
                 <tr>
                     <td style="font-size:18px; text-align:center;">
-                        {% if loop.index == 1 %}🥇
-                        {% elif loop.index == 2 %}🥈
-                        {% elif loop.index == 3 %}🥉
+                        {% if loop.index == 1 %}<i data-lucide="medal" style="width:18px;height:18px;color:#ffd700;"></i>
+                        {% elif loop.index == 2 %}<i data-lucide="medal" style="width:18px;height:18px;color:#c0c0c0;"></i>
+                        {% elif loop.index == 3 %}<i data-lucide="medal" style="width:18px;height:18px;color:#cd7f32;"></i>
                         {% else %}<span style="color:var(--text-muted);">{{ loop.index }}</span>
                         {% endif %}
                     </td>
@@ -120,7 +121,7 @@
                     </td>
                     <td>
                         {% if player.max_win_streak > 0 %}
-                            <span style="color:var(--gold);">{{ player.max_win_streak }} 🔥</span>
+                            <span style="color:var(--gold);">{{ player.max_win_streak }} <i data-lucide="flame" style="width:12px;height:12px;vertical-align:middle;"></i></span>
                         {% else %}
                             <span style="color:var(--text-muted);">–</span>
                         {% endif %}
@@ -131,7 +132,7 @@
         </table>
     </div>
 
-    <h3>📈 Kumulativni postotak pogotka</h3>
+    <h3><i data-lucide="trending-up" style="width:16px;height:16px;margin-right:6px;vertical-align:middle;color:var(--accent);"></i>Kumulativni postotak pogotka</h3>
     <div class="window" style="margin-bottom:16px;">
         <div class="title-bar">
             <div class="title-bar-text">Win rate po tiketu{% if title %} — {{ title }}{% endif %}</div>
@@ -144,7 +145,7 @@
         </div>
     </div>
 
-    <h3>💸 Ulaganja</h3>
+    <h3><i data-lucide="banknote" style="width:16px;height:16px;margin-right:6px;vertical-align:middle;color:var(--accent);"></i>Ulaganja</h3>
     <div class="table-wrap" style="margin-bottom:8px;">
         <table>
             <thead>
@@ -175,16 +176,16 @@
 <body>
 <div class="window">
     <div class="title-bar" style="padding:12px 18px;">
-        <div class="title-bar-text"><span class="app-title">🏆 Poredak</span></div>
+        <div class="title-bar-text"><span class="app-title"><i data-lucide="trophy" style="width:20px;height:20px;margin-right:8px;vertical-align:middle;"></i>Poredak</span></div>
     </div>
 
     <div class="menu-bar">
         <div class="menu-item" onclick="this.querySelector('.dropdown').style.display = this.querySelector('.dropdown').style.display === 'flex' ? 'none' : 'flex'">
-            ☰ Navigacija
+            <i data-lucide="menu" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Navigacija
             <div class="dropdown" style="display:none;">
-                <a href="/">⬅ Natrag na početnu</a>
-                <a href="/pravila">Pravila igre</a>
-                {% if not admin_logged_in %}<a href="/login">Admin prijava</a>{% endif %}
+                <a href="/"><i data-lucide="arrow-left" style="width:13px;height:13px;"></i>Natrag na početnu</a>
+                <a href="/pravila"><i data-lucide="scroll-text" style="width:13px;height:13px;"></i>Pravila igre</a>
+                {% if not admin_logged_in %}<a href="/login"><i data-lucide="log-in" style="width:13px;height:13px;"></i>Admin prijava</a>{% endif %}
             </div>
         </div>
     </div>
@@ -196,7 +197,7 @@
         <div class="window" style="margin-bottom:20px;" id="periodPanel">
             <div class="title-bar" style="padding:8px 14px; cursor:pointer;"
                  onclick="var b=this.nextElementSibling; b.style.display=b.style.display==='none'?'block':'none'; this.querySelector('.toggle-arrow').textContent=b.style.display==='none'?'▼ Otvori':'▲ Zatvori'">
-                <div class="title-bar-text" style="font-size:13px;">🔒 Upravljanje periodima</div>
+                <div class="title-bar-text" style="font-size:13px;"><i data-lucide="lock" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Upravljanje periodima</div>
                 <span class="toggle-arrow" style="margin-left:auto; color:var(--text-muted); font-size:11px;">▼ Otvori</span>
             </div>
             <div class="window-body" style="display:none; padding:14px 16px;">
@@ -250,7 +251,7 @@
 
         <!-- ── Tab Bar ──────────────────────────────────────────────────── -->
         <div class="tab-bar">
-            <button class="tab-btn active" onclick="switchTab('overall', this)">🌐 Ukupno</button>
+            <button class="tab-btn active" onclick="switchTab('overall', this)"><i data-lucide="globe" style="width:12px;height:12px;margin-right:4px;vertical-align:middle;"></i>Ukupno</button>
             {% for pt in period_tabs %}
             <button class="tab-btn" onclick="switchTab('period-{{ pt.id }}', this)">
                 {{ pt.name }}<span class="period-badge">{{ pt.ticket_count }}</span>
@@ -371,5 +372,6 @@
     drawChart('overall');
 </script>
 
+<script>lucide.createIcons();</script>
 </body>
 </html>

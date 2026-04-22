@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="/static/style.css">
 
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
     <style>
         .highlight { background-color: rgba(255,210,0,0.3); color: #ffd700; border-radius: 2px; padding: 0 2px; }
@@ -47,24 +48,24 @@
     <div class="menu-bar" @click.outside="openMenu = null" x-data="{ openMenu: null }">
 
         <!-- Direct nav links -->
-        <a href="/leaderboard" class="menu-item" style="text-decoration:none;">Poredak</a>
-        <a href="/pravila"    class="menu-item" style="text-decoration:none;">Pravila</a>
+        <a href="/leaderboard" class="menu-item" style="text-decoration:none;"><i data-lucide="trophy" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Poredak</a>
+        <a href="/pravila"    class="menu-item" style="text-decoration:none;"><i data-lucide="scroll-text" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Pravila</a>
 
         <!-- Admin-only direct action -->
         <a href="/update" class="menu-item" x-show="admin_logged_in"
-           style="text-decoration:none; color:var(--accent);">Ažuriraj tikete</a>
+           style="text-decoration:none; color:var(--accent);"><i data-lucide="refresh-cw" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Ažuriraj tikete</a>
 
         <!-- Right side: Admin -->
         <div class="menu-item" @click="openMenu = openMenu === 'admin' ? null : 'admin'"
              style="margin-left:auto;">
-            <span x-show="!admin_logged_in">Login</span>
-            <span x-show="admin_logged_in" style="color:var(--green);">Admin ▾</span>
+            <span x-show="!admin_logged_in"><i data-lucide="log-in" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Login</span>
+            <span x-show="admin_logged_in" style="color:var(--green);"><i data-lucide="shield-check" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Admin ▾</span>
             <div class="dropdown" x-show="openMenu === 'admin'" style="right:0; left:auto;">
-                <a x-show="!admin_logged_in" @click.prevent="loginModal=true; openMenu=null" href="#">Prijava</a>
-                <a x-show="admin_logged_in" href="/logout">Odjava</a>
+                <a x-show="!admin_logged_in" @click.prevent="loginModal=true; openMenu=null" href="#"><i data-lucide="log-in" style="width:13px;height:13px;"></i>Prijava</a>
+                <a x-show="admin_logged_in" href="/logout"><i data-lucide="log-out" style="width:13px;height:13px;"></i>Odjava</a>
                 <template x-if="admin_logged_in">
                     <span style="padding:10px 16px; color:var(--green); font-size:12px; display:block; font-weight:600; border-top:1px solid var(--border);">
-                        ✔ Prijavljen kao admin
+                        <i data-lucide="check-circle" style="width:12px;height:12px;margin-right:4px;vertical-align:middle;"></i>Prijavljen kao admin
                     </span>
                 </template>
             </div>
@@ -89,7 +90,7 @@
     <!-- Player Management Panel (admin only) -->
     <div x-show="admin_logged_in" class="window" style="margin:10px; border-radius:8px;">
         <div class="title-bar" style="padding:8px 14px; cursor:pointer;" @click="playersOpen = !playersOpen">
-            <div class="title-bar-text" style="font-size:13px;">👥 Upravljanje igračima</div>
+            <div class="title-bar-text" style="font-size:13px;"><i data-lucide="users" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Upravljanje igračima</div>
             <span style="margin-left:auto; color:var(--text-muted); font-size:12px;" x-text="playersOpen ? '▲ Zatvori' : '▼ Otvori'"></span>
         </div>
         <div class="window-body" x-show="playersOpen" style="padding:12px 14px;">
@@ -137,7 +138,7 @@
                 <button type="submit" style="white-space:nowrap; background:var(--green) !important; color:#000 !important;">+ Dodaj igrača</button>
             </form>
             <p style="margin-top:8px; font-size:11px; color:var(--text-muted);">
-                ℹ️ Novi igrač plaća €1 za sebe pri prvom tiketu na kojemu sudjeluje. Datum dodavanja određuje od kojeg tiketa igrač sudjeluje — tiketi odigrani <em>prije</em> tog datuma automatski ga isključuju, čak i pri ponovnom uvozu tiketa.
+                ℹ Novi igrač plaća €1 za sebe pri prvom tiketu na kojemu sudjeluje. Datum dodavanja određuje od kojeg tiketa igrač sudjeluje — tiketi odigrani <em>prije</em> tog datuma automatski ga isključuju, čak i pri ponovnom uvozu tiketa.
             </p>
         </div>
     </div>
@@ -404,10 +405,10 @@
                     <strong>{{ name }}</strong>
                     <div style="margin-top:4px; line-height:1; font-size: {{ size }}em;">
                         {% if wstreak == 0 %}
-                            <span style="opacity:0.2;">🟢</span>
+                            <span class="streak-dot" style="opacity:0.2; background:var(--text-muted); box-shadow:none;"></span>
                         {% else %}
                             {% for i in range(wstreak) %}
-                                <span class="streak-emoji" style="animation-delay: {{ i * 0.1 }}s;">🟢</span>
+                                <span class="streak-dot streak-emoji" style="animation-delay: {{ i * 0.1 }}s;"></span>
                             {% endfor %}
                         {% endif %}
                     </div>
@@ -424,9 +425,9 @@
             <input type="text" x-model="search" placeholder="Traži tiket / igrača / par" style="flex:1; min-width:200px;">
             <div style="display:flex; gap:4px; flex-wrap:wrap;">
                 <button class="filter-btn" :class="filter=='ALL' ? 'active-filter' : ''" @click="filter='ALL'">Svi</button>
-                <button class="filter-btn" :class="filter=='WINNING' ? 'active-filter' : ''" @click="filter='WINNING'">✅ Zeleni</button>
-                <button class="filter-btn" :class="filter=='LOSING' ? 'active-filter' : ''" @click="filter='LOSING'">❌ Crveni</button>
-                <button class="filter-btn" :class="filter=='PENDING' ? 'active-filter' : ''" @click="filter='PENDING'">⏳ U tijeku</button>
+                <button class="filter-btn" :class="filter=='WINNING' ? 'active-filter' : ''" @click="filter='WINNING'"><i data-lucide="check-circle-2" style="width:12px;height:12px;margin-right:4px;vertical-align:middle;color:var(--green);"></i>Zeleni</button>
+                <button class="filter-btn" :class="filter=='LOSING' ? 'active-filter' : ''" @click="filter='LOSING'"><i data-lucide="x-circle" style="width:12px;height:12px;margin-right:4px;vertical-align:middle;color:var(--red);"></i>Crveni</button>
+                <button class="filter-btn" :class="filter=='PENDING' ? 'active-filter' : ''" @click="filter='PENDING'"><i data-lucide="clock" style="width:12px;height:12px;margin-right:4px;vertical-align:middle;"></i>U tijeku</button>
             </div>
         </div>
 
@@ -453,7 +454,7 @@
                     padding: 8px 14px; border-left: 3px solid var(--gold);
                     background: rgba(216,211,101,0.06); border-radius: 0 6px 6px 0;">
             <span style="font-family:'Bebas Neue',sans-serif; font-size:16px; letter-spacing:1.5px; color:var(--gold);">
-                🔒 {{ p.name }}
+                <i data-lucide="lock" style="width:14px;height:14px;margin-right:4px;vertical-align:middle;"></i>{{ p.name }}
             </span>
             <span style="font-size:12px; color:var(--text-muted);">od {{ p.start_date }}</span>
             <a href="/leaderboard" style="margin-left:auto; font-size:11px; color:var(--accent);">→ Poredak perioda</a>
@@ -465,7 +466,7 @@
                     padding: 8px 14px; border-left: 3px solid var(--border);
                     background: rgba(255,255,255,0.02); border-radius: 0 6px 6px 0;">
             <span style="font-family:'Bebas Neue',sans-serif; font-size:16px; letter-spacing:1.5px; color:var(--text-muted);">
-                📁 Stariji tiketi
+                <i data-lucide="archive" style="width:14px;height:14px;margin-right:4px;vertical-align:middle;"></i>Stariji tiketi
             </span>
         </div>
         {% endif %}
@@ -491,13 +492,13 @@
                 {% if is_locked %}
                 {# Locked ticket: title not clickable, no collapse arrow, lock icon shown #}
                 <div class="title-bar-text" style="flex:1; opacity:0.9;">
-                    {% if status == 'WINNING' %}✅{% elif status == 'LOSING' %}❌{% else %}⏳{% endif %}
+                    {% if status == 'WINNING' %}<i data-lucide="check-circle-2" style="width:13px;height:13px;vertical-align:middle;color:#4ade80;"></i>{% elif status == 'LOSING' %}<i data-lucide="x-circle" style="width:13px;height:13px;vertical-align:middle;color:var(--red);"></i>{% else %}<i data-lucide="clock" style="width:13px;height:13px;vertical-align:middle;"></i>{% endif %}
                     &nbsp;Ticket: <span x-html="highlight('{{ ticket[1] }}')"></span>
-                    <span style="font-size:10px; opacity:0.5; margin-left:4px;">🔒</span>
+                    <i data-lucide="lock" style="width:10px;height:10px;opacity:0.5;margin-left:4px;vertical-align:middle;"></i>
                 </div>
                 {% else %}
                 <div class="title-bar-text" @click="open = !open" style="cursor:pointer; flex:1;">
-                    {% if status == 'WINNING' %}✅{% elif status == 'LOSING' %}❌{% else %}⏳{% endif %}
+                    {% if status == 'WINNING' %}<i data-lucide="check-circle-2" style="width:13px;height:13px;vertical-align:middle;color:#4ade80;"></i>{% elif status == 'LOSING' %}<i data-lucide="x-circle" style="width:13px;height:13px;vertical-align:middle;color:var(--red);"></i>{% else %}<i data-lucide="clock" style="width:13px;height:13px;vertical-align:middle;"></i>{% endif %}
                     &nbsp;Ticket: <span x-html="highlight('{{ ticket[1] }}')"></span>
                     <span x-text="open ? ' ▼' : ' ▶'" style="font-size:11px; opacity:0.7;"></span>
                 </div>
@@ -513,7 +514,7 @@
             </div>
 
             <div class="window-body" x-show="open" style="padding:12px 14px;">
-                <p style="margin-bottom:10px;"><small>Igrano: {{ ticket[2] }} &nbsp;|&nbsp; Ažurirano: {{ ticket[3] }} &nbsp;|&nbsp; <a href="https://applink.psk.hr/ticketdetail?id={{ ticket[5] }}&source=SB" target="_blank">🔗 Otvori tiket</a></small></p>
+                <p style="margin-bottom:10px;"><small>Igrano: {{ ticket[2] }} &nbsp;|&nbsp; Ažurirano: {{ ticket[3] }} &nbsp;|&nbsp; <a href="https://applink.psk.hr/ticketdetail?id={{ ticket[5] }}&source=SB" target="_blank"><i data-lucide="external-link" style="width:12px;height:12px;margin-right:3px;vertical-align:middle;"></i>Otvori tiket</a></small></p>
 
                 <!-- View mode -->
                 <div class="table-wrap" x-show="!editing">
@@ -539,10 +540,10 @@
                                 <td class="hide-mobile" style="font-weight:600; color:var(--accent2);">{{ bet[7] or '–' }}</td>
                                 {% set leg_result = normalize_result(bet[4]) %}
                                 <td class="{{ leg_result }}">
-                                    {% if leg_result == 'WINNING' %}✅ Pogodak
-                                    {% elif leg_result == 'LOSING' %}❌ Promašaj
-                                    {% elif leg_result == 'VOIDED' %}🔘 Void
-                                    {% else %}⏳ U tijeku
+                                    {% if leg_result == 'WINNING' %}<i data-lucide="check-circle-2" style="width:12px;height:12px;vertical-align:middle;color:#4ade80;margin-right:3px;"></i>Pogodak
+                                    {% elif leg_result == 'LOSING' %}<i data-lucide="x-circle" style="width:12px;height:12px;vertical-align:middle;color:var(--red);margin-right:3px;"></i>Promašaj
+                                    {% elif leg_result == 'VOIDED' %}<i data-lucide="minus-circle" style="width:12px;height:12px;vertical-align:middle;color:var(--text-muted);margin-right:3px;"></i>Void
+                                    {% else %}<i data-lucide="clock" style="width:12px;height:12px;vertical-align:middle;margin-right:3px;"></i>U tijeku
                                     {% endif %}
                                 </td>
                             </tr>
@@ -583,10 +584,10 @@
                                     <td class="hide-mobile" style="font-weight:600; color:var(--accent2);">{{ bet[7] or '–' }}</td>
                                     {% set leg_result = normalize_result(bet[4]) %}
                                     <td class="{{ leg_result }}">
-                                        {% if leg_result == 'WINNING' %}✅ Pogodak
-                                        {% elif leg_result == 'LOSING' %}❌ Promašaj
-                                        {% elif leg_result == 'VOIDED' %}🔘 Void
-                                        {% else %}⏳ U tijeku
+                                        {% if leg_result == 'WINNING' %}<i data-lucide="check-circle-2" style="width:12px;height:12px;vertical-align:middle;color:#4ade80;margin-right:3px;"></i>Pogodak
+                                        {% elif leg_result == 'LOSING' %}<i data-lucide="x-circle" style="width:12px;height:12px;vertical-align:middle;color:var(--red);margin-right:3px;"></i>Promašaj
+                                        {% elif leg_result == 'VOIDED' %}<i data-lucide="minus-circle" style="width:12px;height:12px;vertical-align:middle;color:var(--text-muted);margin-right:3px;"></i>Void
+                                        {% else %}<i data-lucide="clock" style="width:12px;height:12px;vertical-align:middle;margin-right:3px;"></i>U tijeku
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -596,14 +597,14 @@
                         </table>
                     </div>
                     <div style="display:flex; justify-content:flex-end; margin-top:10px;">
-                        <button type="submit">💾 Spremi</button>
+                        <button type="submit"><i data-lucide="save" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Spremi</button>
                     </div>
                 </form>
 
                 {% if admin_logged_in %}
                 <div style="display:flex; justify-content:flex-end; margin-top:10px;">
                     <button type="button" @click="editing = !editing">
-                        <span x-text="editing ? '✕ Odustani' : '✏ Uredi tiket'"></span>
+                        <span x-text="editing ? '✕ Odustani' : '✎ Uredi tiket'"></span>
                     </button>
                 </div>
                 {% endif %}
@@ -619,7 +620,7 @@
 <div x-show="loginModal" class="modal-overlay" @click.self="loginModal=false">
     <div class="window modal-window">
         <div class="title-bar">
-            <div class="title-bar-text">🔑 Admin Login</div>
+            <div class="title-bar-text"><i data-lucide="key-round" style="width:14px;height:14px;margin-right:5px;vertical-align:middle;"></i>Admin Login</div>
         </div>
         <div class="window-body">
             <form method="POST" action="/login">
@@ -676,6 +677,7 @@ function ticketApp() {
     }
 }
 </script>
+<script>lucide.createIcons();</script>
 
 </body>
 </html>

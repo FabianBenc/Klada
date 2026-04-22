@@ -10,6 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 
 <body>
@@ -20,11 +21,11 @@
 
     <div class="menu-bar">
         <div class="menu-item" onclick="this.querySelector('.dropdown').style.display = this.querySelector('.dropdown').style.display === 'flex' ? 'none' : 'flex'">
-            ☰ Navigacija
+            <i data-lucide="menu" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Navigacija
             <div class="dropdown" style="display:none;">
-                <a href="/">⬅ Natrag na početnu</a>
-                <a href="/leaderboard">Poredak</a>
-                <a href="/login">Admin prijava</a>
+                <a href="/"><i data-lucide="arrow-left" style="width:13px;height:13px;"></i>Natrag na početnu</a>
+                <a href="/leaderboard"><i data-lucide="trophy" style="width:13px;height:13px;"></i>Poredak</a>
+                <a href="/login"><i data-lucide="log-in" style="width:13px;height:13px;"></i>Admin prijava</a>
             </div>
         </div>
     </div>
@@ -132,7 +133,7 @@
 
         <!-- Članak 9 -->
         <div class="window" style="margin-bottom:10px;">
-            <div class="title-bar"><div class="title-bar-text">Članak 9. – Kaznene odredbe ⚠️</div></div>
+            <div class="title-bar"><div class="title-bar-text">Članak 9. – Kaznene odredbe</div></div>
             <div class="window-body">
                 <p>Ako korisnik promaši oba para <strong>3 tiketa zaredom</strong>, dužan je <strong>sam platiti puni tiket</strong> u 4. tjednu igre.</p>
             </div>
@@ -165,5 +166,6 @@
     });
 </script>
 
+<script>lucide.createIcons();</script>
 </body>
 </html>

@@ -10,20 +10,21 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
 
 <div class="window" style="max-width: 360px; margin: 80px auto;">
     <div class="title-bar" style="padding:12px 18px;">
-        <div class="title-bar-text"><span style="font-family:'Bebas Neue'; letter-spacing:2px; font-size:16px;">🔑 Admin Login</span></div>
+        <div class="title-bar-text"><span style="font-family:'Bebas Neue'; letter-spacing:2px; font-size:16px;"><i data-lucide="key-round" style="width:14px;height:14px;margin-right:5px;vertical-align:middle;"></i>Admin Login</span></div>
     </div>
 
     <div class="menu-bar">
         <div class="menu-item" onclick="this.querySelector('.dropdown').style.display = this.querySelector('.dropdown').style.display === 'flex' ? 'none' : 'flex'">
-            ☰ Navigacija
+            <i data-lucide="menu" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Navigacija
             <div class="dropdown" style="display:none;">
-                <a href="/">⬅ Natrag na početnu</a>
-                <a href="/leaderboard">🏆 Poredak</a>
+                <a href="/"><i data-lucide="arrow-left" style="width:13px;height:13px;"></i>Natrag na početnu</a>
+                <a href="/leaderboard"><i data-lucide="trophy" style="width:13px;height:13px;"></i>Poredak</a>
             </div>
         </div>
     </div>
@@ -64,5 +65,6 @@
     });
 </script>
 
+<script>lucide.createIcons();</script>
 </body>
 </html>

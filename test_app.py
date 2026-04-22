@@ -468,3 +468,83 @@ class TestPayments:
         assert html.count("€4.00") == 2
         # Players 3-6: only €1 (T1)
         assert html.count("€1.00") == 4
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# UI rendering tests — verify Lucide icons present, no raw emojis in nav/UI
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestUIRendering:
+    """Verify icon-based UI: Lucide CDN loaded, key emojis replaced in rendered HTML."""
+
+    def test_index_loads_lucide_cdn(self, client):
+        r = client.get("/")
+        html = r.data.decode()
+        assert "lucide" in html
+
+    def test_leaderboard_loads_lucide_cdn(self, client):
+        r = client.get("/leaderboard")
+        html = r.data.decode()
+        assert "lucide" in html
+
+    def test_index_no_raw_nav_emojis(self, client):
+        """Nav bar should use Lucide icons, not raw emoji characters."""
+        r = client.get("/")
+        html = r.data.decode()
+        # These emoji were in the nav/menu bar before the icon refactor
+        assert "☰" not in html
+        assert "⬅" not in html
+
+    def test_index_filter_buttons_no_emoji(self, client):
+        """Filter buttons should use Lucide icons instead of ✅ ❌ ⏳."""
+        r = client.get("/")
+        html = r.data.decode()
+        assert "✅" not in html
+        assert "❌" not in html
+        assert "⏳" not in html
+
+    def test_index_no_lock_emoji(self, client):
+        """Lock emoji replaced by Lucide lock icon."""
+        r = client.get("/")
+        html = r.data.decode()
+        assert "🔒" not in html
+
+    def test_leaderboard_no_trophy_emoji(self, client):
+        r = client.get("/leaderboard")
+        html = r.data.decode()
+        assert "🏆" not in html
+
+    def test_leaderboard_no_medal_emojis(self, client):
+        r = client.get("/leaderboard")
+        html = r.data.decode()
+        assert "🥇" not in html
+        assert "🥈" not in html
+        assert "🥉" not in html
+
+    def test_leaderboard_data_lucide_icon_markup(self, admin_client, use_temp_db):
+        """After inserting a player, leaderboard should render Lucide icon markup."""
+        conn = sqlite3.connect(use_temp_db)
+        conn.execute(
+            "INSERT INTO tickets (ticket_id, ticket_number, created_at, last_updated, ticket_result) VALUES (?,?,?,?,?)",
+            ("T1", "NUM1", "2026-01-01", "2026-01-01", "WINNING")
+        )
+        for pid in range(1, 7):
+            conn.execute(
+                "INSERT INTO bets (ticket_id, player, fixture_name, odds, result) VALUES (?,?,?,?,?)",
+                ("T1", pid, f"Match {pid}", 2.0, "WINNING")
+            )
+        conn.commit()
+        conn.close()
+        r = admin_client.get("/leaderboard")
+        html = r.data.decode()
+        assert "data-lucide" in html
+
+    def test_login_page_no_key_emoji(self, client):
+        r = client.get("/login")
+        html = r.data.decode()
+        assert "🔑" not in html
+
+    def test_pravila_no_menu_emoji(self, client):
+        r = client.get("/pravila")
+        html = r.data.decode()
+        assert "☰" not in html
