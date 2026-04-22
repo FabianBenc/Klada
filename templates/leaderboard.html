@@ -80,8 +80,8 @@
     <p class="sort-note">
         Poredak: <strong>1.</strong> % pogodaka &nbsp;›&nbsp;
         <strong>2.</strong> prosječni tečaj &nbsp;›&nbsp;
-        <strong>3.</strong> manje void parova.
-        Void parovi se <em>ne</em> računaju u win rate.
+        <strong>3.</strong> manje poništenih parova.
+        Poništeni parovi se <em>ne</em> računaju u win rate.
     </p>
 
     <div class="table-wrap" style="margin-bottom:20px;">
@@ -95,7 +95,7 @@
                     <th>%</th>
                     <th class="hide-mobile">Prosj. tečaj</th>
                     <th class="hide-mobile">Najveći tečaj</th>
-                    <th class="hide-mobile" title="Broj void parova"><i data-lucide="minus-circle" style="width:13px;height:13px;color:var(--text-muted);vertical-align:middle;margin-right:3px;"></i>Void</th>
+                    <th class="hide-mobile" title="Broj poništenih parova"><i data-lucide="minus-circle" style="width:13px;height:13px;color:var(--text-muted);vertical-align:middle;margin-right:3px;"></i>Poništen</th>
                     <th><i data-lucide="flame" style="width:13px;height:13px;color:var(--accent);vertical-align:middle;margin-right:3px;"></i>Niz</th>
                 </tr>
             </thead>
@@ -152,6 +152,7 @@
                 <tr>
                     <th>Igrač</th>
                     <th>Ukupno plaćeno (€)</th>
+                    <th>Dobitci (€)</th>
                 </tr>
             </thead>
             <tbody>
@@ -164,6 +165,13 @@
                     </td>
                     <td>
                         <strong style="color:var(--red);">€{{ "%.2f"|format(row.total_paid) }}</strong>
+                    </td>
+                    <td>
+                        {% if row.total_won and row.total_won > 0 %}
+                            <strong style="color:var(--green);">€{{ "%.2f"|format(row.total_won) }}</strong>
+                        {% else %}
+                            <span style="color:var(--text-muted);">–</span>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}

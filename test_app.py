@@ -48,20 +48,23 @@ def admin_client(client):
 # Helper — build minimal API-shaped ticket dict
 # ─────────────────────────────────────────────────────────────────────────────
 
-def make_api_ticket(ticket_id="T1", number="NUM001", result="PENDING", legs=None):
+def make_api_ticket(ticket_id="T1", number="NUM001", result="PENDING", legs=None, payout=None):
     if legs is None:
         # Default: 6 legs (one per player), alternating WINNING/LOSING
         legs = [
             {"fixtureName": f"Match {i+1}", "oddsPlaced": 1.8, "result": "WINNING" if i % 2 == 0 else "LOSING"}
             for i in range(6)
         ]
-    return {
+    ticket = {
         "id": ticket_id,
         "number": number,
         "result": result,
         "placementDetailsTime": "2026-03-27T10:46:28Z",
         "legs": legs,
     }
+    if payout is not None:
+        ticket["payoutDetailsWinning"] = payout
+    return ticket
 
 
 def make_legs(results):
@@ -548,3 +551,140 @@ class TestUIRendering:
         r = client.get("/pravila")
         html = r.data.decode()
         assert "☰" not in html
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Payout / winnings tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestPayoutWinnings:
+    """Tests for payoutDetailsWinning storage and per-player winnings split."""
+
+    def test_payout_stored_on_winning_ticket(self, use_temp_db):
+        data = make_api_ticket("T1", result="WINNING",
+                               legs=make_legs(["WINNING"] * 6),
+                               payout=60.0)
+        A.save_ticket("JWT1", data)
+
+        conn = sqlite3.connect(use_temp_db)
+        row = conn.execute("SELECT payout FROM tickets WHERE ticket_id='T1'").fetchone()
+        conn.close()
+        assert row is not None
+        assert row[0] == 60.0
+
+    def test_payout_null_on_losing_ticket(self, use_temp_db):
+        data = make_api_ticket("T1", result="LOSING",
+                               legs=make_legs(["LOSING"] * 6))
+        A.save_ticket("JWT1", data)
+
+        conn = sqlite3.connect(use_temp_db)
+        row = conn.execute("SELECT payout FROM tickets WHERE ticket_id='T1'").fetchone()
+        conn.close()
+        assert row[0] is None
+
+    def test_payout_not_set_when_missing_from_api(self, use_temp_db):
+        """Ticket with result=WINNING but no payoutDetailsWinning key."""
+        data = make_api_ticket("T1", result="WINNING",
+                               legs=make_legs(["WINNING"] * 6))
+        # payout kwarg not passed → key absent from dict
+        A.save_ticket("JWT1", data)
+
+        conn = sqlite3.connect(use_temp_db)
+        row = conn.execute("SELECT payout FROM tickets WHERE ticket_id='T1'").fetchone()
+        conn.close()
+        assert row[0] is None
+
+    def test_winnings_split_equally_among_players(self, use_temp_db):
+        """€60 payout / 6 players = €10 each."""
+        data = make_api_ticket("T1", result="WINNING",
+                               legs=make_legs(["WINNING"] * 6),
+                               payout=60.0)
+        A.save_ticket("JWT1", data)
+
+        conn = sqlite3.connect(use_temp_db)
+        c = conn.cursor()
+        player_names = A.get_player_names(conn)
+        ticket_ids = [r[0] for r in c.execute(
+            "SELECT ticket_id FROM tickets WHERE ticket_result='WINNING'"
+        ).fetchall()]
+        _, payment_data = A.compute_leaderboard_stats(c, player_names, ticket_ids)
+        conn.close()
+
+        for row in payment_data:
+            assert row["total_won"] == 10.0, f"{row['name']} expected €10, got €{row['total_won']}"
+
+    def test_winnings_zero_when_no_winning_tickets(self, use_temp_db):
+        data = make_api_ticket("T1", result="LOSING",
+                               legs=make_legs(["LOSING"] * 6))
+        A.save_ticket("JWT1", data)
+
+        conn = sqlite3.connect(use_temp_db)
+        c = conn.cursor()
+        player_names = A.get_player_names(conn)
+        ticket_ids = [r[0] for r in c.execute(
+            "SELECT ticket_id FROM tickets WHERE ticket_result='WINNING'"
+        ).fetchall()]
+        _, payment_data = A.compute_leaderboard_stats(c, player_names, ticket_ids)
+        conn.close()
+
+        for row in payment_data:
+            assert row["total_won"] == 0.0
+
+    def test_winnings_only_for_players_on_ticket(self, use_temp_db):
+        """Only 3 players have legs → payout split 3 ways, other 3 get 0."""
+        legs = make_legs(["WINNING"] * 3)   # 3 legs → players 1,2,3 only
+        data = make_api_ticket("T1", result="WINNING", legs=legs, payout=30.0)
+        A.save_ticket("JWT1", data)
+
+        conn = sqlite3.connect(use_temp_db)
+        c = conn.cursor()
+        player_names = A.get_player_names(conn)
+        ticket_ids = ["T1"]
+        _, payment_data = A.compute_leaderboard_stats(c, player_names, ticket_ids)
+        conn.close()
+
+        by_player = {r["name"]: r["total_won"] for r in payment_data}
+        # Players 1,2,3 each get €10; 4,5,6 get 0
+        for name in list(by_player.keys())[:3]:
+            assert by_player[name] == 10.0, f"{name} expected €10"
+        for name in list(by_player.keys())[3:]:
+            assert by_player[name] == 0.0, f"{name} expected €0"
+
+    def test_winnings_accumulate_across_multiple_tickets(self, use_temp_db):
+        """Two winning tickets of €12 each with 6 players = €4 per player total."""
+        for i in range(1, 3):
+            data = make_api_ticket(f"T{i}", f"NUM{i}", result="WINNING",
+                                   legs=make_legs(["WINNING"] * 6),
+                                   payout=12.0)
+            A.save_ticket(f"JWT{i}", data)
+
+        conn = sqlite3.connect(use_temp_db)
+        c = conn.cursor()
+        player_names = A.get_player_names(conn)
+        ticket_ids = [r[0] for r in c.execute(
+            "SELECT ticket_id FROM tickets WHERE ticket_result='WINNING' ORDER BY id"
+        ).fetchall()]
+        _, payment_data = A.compute_leaderboard_stats(c, player_names, ticket_ids)
+        conn.close()
+
+        for row in payment_data:
+            assert row["total_won"] == 4.0, f"{row['name']} expected €4, got €{row['total_won']}"
+
+    def test_leaderboard_html_shows_winnings_column(self, admin_client, use_temp_db):
+        """Leaderboard renders the Dobici column when a payout exists."""
+        conn = sqlite3.connect(use_temp_db)
+        conn.execute(
+            "INSERT INTO tickets (ticket_id, ticket_number, created_at, last_updated, ticket_result, payout)"
+            " VALUES ('T1','NUM1','2026-01-01','2026-01-01','WINNING', 60.0)"
+        )
+        for pid in range(1, 7):
+            conn.execute(
+                "INSERT INTO bets (ticket_id, player, fixture_name, odds, result) VALUES (?,?,?,?,?)",
+                ("T1", pid, f"Match {pid}", 2.0, "WINNING")
+            )
+        conn.commit()
+        conn.close()
+
+        r = admin_client.get("/leaderboard")
+        html = r.data.decode()
+        assert "Dobici" in html
+        assert "€10.00" in html

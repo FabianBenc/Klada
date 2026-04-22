@@ -157,6 +157,8 @@ def init_db():
         c.execute("ALTER TABLE tickets ADD COLUMN ticket_result TEXT")
     if "period_id" not in columns:
         c.execute("ALTER TABLE tickets ADD COLUMN period_id INTEGER REFERENCES periods(id)")
+    if "payout" not in columns:
+        c.execute("ALTER TABLE tickets ADD COLUMN payout REAL")
 
     # ── periods table ─────────────────────────────────────────────────────────
     c.execute("""
@@ -285,10 +287,20 @@ def save_ticket(ticket_number, data):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     psk_created = parse_psk_date(data.get("placementDetailsTime", ""))
 
+    # Extract payout from winning ticket
+    payout = None
+    if data.get("result") == "WINNING":
+        payout = data.get("payoutDetailsWinning")
+        if payout is not None:
+            try:
+                payout = float(payout)
+            except (TypeError, ValueError):
+                payout = None
+
     c.execute("""
-        INSERT INTO tickets (ticket_id, ticket_number, created_at, last_updated, ticket_jwt, ticket_result)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (ticket_id, number, psk_created, now, ticket_number, data.get("result")))
+        INSERT INTO tickets (ticket_id, ticket_number, created_at, last_updated, ticket_jwt, ticket_result, payout)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (ticket_id, number, psk_created, now, ticket_number, data.get("result"), payout))
 
     # Determine which players were eligible for this ticket based on join date.
     # This is the critical fix: when re-importing old tickets after a DB reset,
@@ -492,9 +504,13 @@ def update_ticket_results():
                 WHERE ticket_id=? AND fixture_name=?
             """, (leg.get("result"), start_time, score, ticket_id, leg.get("fixtureName")))
         c.execute("""
-            UPDATE tickets SET last_updated=?, ticket_result=?
+            UPDATE tickets SET last_updated=?, ticket_result=?,
+            payout = CASE WHEN ? = 'WINNING' THEN COALESCE(?, payout) ELSE payout END
             WHERE ticket_id=?
-        """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), data.get("result"), ticket_id))
+        """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), data.get("result"),
+              data.get("result"),
+              float(data["payoutDetailsWinning"]) if data.get("payoutDetailsWinning") else None,
+              ticket_id))
         conn.commit()
 
     conn.commit()
@@ -890,8 +906,30 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
                         if pid in payments:
                             payments[pid] += cost_per_loser
 
+    # ── Winnings calculation ──────────────────────────────────────────────────
+    # For each WINNING ticket, split payout equally among all players on that ticket.
+    winnings = {pid: 0.0 for pid in player_names}
+    for ticket_id in resolved_ticket_ids:
+        c.execute("SELECT ticket_result, payout FROM tickets WHERE ticket_id=?", (ticket_id,))
+        t_row = c.fetchone()
+        if not t_row or t_row[0] != "WINNING" or t_row[1] is None:
+            continue
+        payout = float(t_row[1])
+        c.execute("SELECT DISTINCT player FROM bets WHERE ticket_id=?", (ticket_id,))
+        t_players = [r[0] for r in c.fetchall()]
+        eligible = [pid for pid in t_players if pid in winnings]
+        if not eligible:
+            continue
+        share = round(payout / len(eligible), 2)
+        for pid in eligible:
+            winnings[pid] += share
+
     payment_data = [
-        {"name": row["name"], "total_paid": round(payments[row["player_id"]], 2)}
+        {
+            "name": row["name"],
+            "total_paid": round(payments[row["player_id"]], 2),
+            "total_won": round(winnings[row["player_id"]], 2),
+        }
         for row in leaderboard_data
     ]
     return leaderboard_data, payment_data
