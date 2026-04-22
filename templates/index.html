@@ -431,8 +431,47 @@
         </div>
 
         <!-- ── Tickets ── -->
+        {# Build a lookup: period_id → period info, for period banners #}
+        {% set period_map = {} %}
+        {% for p in periods %}
+            {% if period_map.update({p.id: p}) %}{% endif %}
+        {% endfor %}
+
+        {# Track which period banner we last rendered so we only show it once per period group #}
+        {% set ns = namespace(last_period_id=None) %}
+
         {% for ticket in tickets %}
         {% set status = normalize_result(ticket[4]) %}
+        {% set ticket_period_id = ticket[6] %}
+
+        {# ── Period banner: show once when period changes (tickets are DESC, so banner shows at top of each group) #}
+        {% if ticket_period_id is not none and ticket_period_id != ns.last_period_id %}
+        {% set ns.last_period_id = ticket_period_id %}
+        {% set p = period_map.get(ticket_period_id) %}
+        {% if p %}
+        <div style="display:flex; align-items:center; gap:10px; margin: 20px 0 8px;
+                    padding: 8px 14px; border-left: 3px solid var(--gold);
+                    background: rgba(216,211,101,0.06); border-radius: 0 6px 6px 0;">
+            <span style="font-family:'Bebas Neue',sans-serif; font-size:16px; letter-spacing:1.5px; color:var(--gold);">
+                🔒 {{ p.name }}
+            </span>
+            <span style="font-size:12px; color:var(--text-muted);">od {{ p.start_date }}</span>
+            <a href="/leaderboard" style="margin-left:auto; font-size:11px; color:var(--accent);">→ Poredak perioda</a>
+        </div>
+        {% endif %}
+        {% elif ticket_period_id is none and ns.last_period_id is not none %}
+        {% set ns.last_period_id = None %}
+        <div style="display:flex; align-items:center; gap:10px; margin: 20px 0 8px;
+                    padding: 8px 14px; border-left: 3px solid var(--border);
+                    background: rgba(255,255,255,0.02); border-radius: 0 6px 6px 0;">
+            <span style="font-family:'Bebas Neue',sans-serif; font-size:16px; letter-spacing:1.5px; color:var(--text-muted);">
+                📁 Stariji tiketi
+            </span>
+        </div>
+        {% endif %}
+
+        {# Locked = ticket belongs to a period; always expanded, no collapse toggle #}
+        {% set is_locked = ticket_period_id is not none %}
 
         <div class="window {% if status == 'WINNING' %}ticket-win{% elif status == 'LOSING' %}ticket-lose{% endif %}"
              x-data="{ open: true, editing: false }"
@@ -449,11 +488,20 @@
                 {% elif status == 'LOSING' %}background: linear-gradient(135deg, #3d0000, #8b0000) !important;
                 {% endif %}">
 
+                {% if is_locked %}
+                {# Locked ticket: title not clickable, no collapse arrow, lock icon shown #}
+                <div class="title-bar-text" style="flex:1; opacity:0.9;">
+                    {% if status == 'WINNING' %}✅{% elif status == 'LOSING' %}❌{% else %}⏳{% endif %}
+                    &nbsp;Ticket: <span x-html="highlight('{{ ticket[1] }}')"></span>
+                    <span style="font-size:10px; opacity:0.5; margin-left:4px;">🔒</span>
+                </div>
+                {% else %}
                 <div class="title-bar-text" @click="open = !open" style="cursor:pointer; flex:1;">
                     {% if status == 'WINNING' %}✅{% elif status == 'LOSING' %}❌{% else %}⏳{% endif %}
                     &nbsp;Ticket: <span x-html="highlight('{{ ticket[1] }}')"></span>
                     <span x-text="open ? ' ▼' : ' ▶'" style="font-size:11px; opacity:0.7;"></span>
                 </div>
+                {% endif %}
 
                 {% if admin_logged_in %}
                 <form method="POST" action="/delete_ticket/{{ ticket[0] }}"

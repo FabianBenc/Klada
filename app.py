@@ -155,6 +155,18 @@ def init_db():
         c.execute("ALTER TABLE tickets ADD COLUMN ticket_jwt TEXT")
     if "ticket_result" not in columns:
         c.execute("ALTER TABLE tickets ADD COLUMN ticket_result TEXT")
+    if "period_id" not in columns:
+        c.execute("ALTER TABLE tickets ADD COLUMN period_id INTEGER REFERENCES periods(id)")
+
+    # ── periods table ─────────────────────────────────────────────────────────
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS periods (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            name       TEXT NOT NULL,
+            start_date TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
 
     # ── ticket_players snapshot table ────────────────────────────────────────
     # Records which players were active when each ticket was created.
@@ -595,7 +607,7 @@ def index():
     c = conn.cursor()
 
     c.execute("""
-        SELECT ticket_id, ticket_number, created_at, last_updated, ticket_result, ticket_jwt
+        SELECT ticket_id, ticket_number, created_at, last_updated, ticket_result, ticket_jwt, period_id
         FROM tickets ORDER BY id DESC
     """)
     tickets = c.fetchall()
@@ -605,6 +617,11 @@ def index():
         FROM bets ORDER BY ticket_id, player
     """)
     bets = c.fetchall()
+
+    # Periods for the period banner on the index page
+    c.execute("SELECT id, name, start_date FROM periods ORDER BY start_date DESC")
+    periods = [{"id": r[0], "name": r[1], "start_date": r[2]} for r in c.fetchall()]
+    period_ids = {p["id"] for p in periods}
 
     conn.close()
 
@@ -618,7 +635,9 @@ def index():
         admin_logged_in=session.get("admin_logged_in"),
         loss_streaks=get_loss_streaks(),
         win_streaks=get_win_streaks(),
-        normalize_result=normalize_result
+        normalize_result=normalize_result,
+        periods=periods,
+        period_ids=period_ids,
     )
 
 
@@ -692,12 +711,20 @@ def chart_data():
     c = conn.cursor()
 
     PLAYER_NAMES = get_player_names(conn)
+    period_id = request.args.get("period", type=int)
 
-    c.execute("""
-        SELECT ticket_id, ticket_number FROM tickets
-        WHERE ticket_result IS NOT NULL AND ticket_result != 'PENDING'
-        ORDER BY id ASC
-    """)
+    if period_id:
+        c.execute("""
+            SELECT ticket_id, ticket_number FROM tickets
+            WHERE period_id=? AND ticket_result IS NOT NULL AND ticket_result != 'PENDING'
+            ORDER BY id ASC
+        """, (period_id,))
+    else:
+        c.execute("""
+            SELECT ticket_id, ticket_number FROM tickets
+            WHERE ticket_result IS NOT NULL AND ticket_result != 'PENDING'
+            ORDER BY id ASC
+        """)
     resolved_tickets = c.fetchall()
 
     labels = []
@@ -731,70 +758,96 @@ def chart_data():
     return jsonify({"labels": labels, "datasets": datasets})
 
 
-@app.route("/leaderboard")
-def leaderboard():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
+def compute_leaderboard_stats(c, player_names, ticket_ids):
+    """
+    Given a cursor, a {player_id: name} dict, and a list of ticket_ids,
+    returns (leaderboard_data, payment_data) for those tickets only.
+    """
+    ticket_set = set(ticket_ids)
 
-    PLAYER_NAMES = get_player_names(conn)
     leaderboard_data = []
+    for player_id, name in player_names.items():
+        if not ticket_set:
+            leaderboard_data.append({
+                "name": name, "player_id": player_id,
+                "win_rate": 0, "avg_odds": 0, "max_win": 0,
+                "max_win_streak": 0, "guessed": 0, "missed": 0, "voided": 0,
+            })
+            continue
 
-    for player_id, name in PLAYER_NAMES.items():
-        # Total resolved legs (exclude VOIDED from win-rate denominator)
-        c.execute("SELECT COUNT(*) FROM bets WHERE player=? AND result NOT IN ('UNKNOWN','PENDING','VOIDED','WINNING_VOIDED') AND result IS NOT NULL", (player_id,))
+        placeholders = ",".join("?" * len(ticket_set))
+        tid_list = list(ticket_set)
+
+        c.execute(f"""
+            SELECT COUNT(*) FROM bets
+            WHERE player=? AND ticket_id IN ({placeholders})
+            AND result NOT IN ('UNKNOWN','PENDING','VOIDED','WINNING_VOIDED')
+            AND result IS NOT NULL
+        """, [player_id] + tid_list)
         total = c.fetchone()[0]
 
-        c.execute("SELECT COUNT(*) FROM bets WHERE player=? AND result='WINNING'", (player_id,))
+        c.execute(f"SELECT COUNT(*) FROM bets WHERE player=? AND ticket_id IN ({placeholders}) AND result='WINNING'",
+                  [player_id] + tid_list)
         guessed = c.fetchone()[0]
 
-        c.execute("SELECT COUNT(*) FROM bets WHERE player=? AND result='LOSING'", (player_id,))
+        c.execute(f"SELECT COUNT(*) FROM bets WHERE player=? AND ticket_id IN ({placeholders}) AND result='LOSING'",
+                  [player_id] + tid_list)
         missed = c.fetchone()[0]
 
-        c.execute("SELECT COUNT(*) FROM bets WHERE player=? AND result IN ('VOIDED','WINNING_VOIDED')", (player_id,))
+        c.execute(f"SELECT COUNT(*) FROM bets WHERE player=? AND ticket_id IN ({placeholders}) AND result IN ('VOIDED','WINNING_VOIDED')",
+                  [player_id] + tid_list)
         voided = c.fetchone()[0]
 
-        c.execute("SELECT AVG(odds) FROM bets WHERE player=? AND result='WINNING'", (player_id,))
+        c.execute(f"SELECT AVG(odds) FROM bets WHERE player=? AND ticket_id IN ({placeholders}) AND result='WINNING'",
+                  [player_id] + tid_list)
         avg_odds = c.fetchone()[0]
 
-        c.execute("SELECT MAX(odds) FROM bets WHERE player=? AND result='WINNING'", (player_id,))
+        c.execute(f"SELECT MAX(odds) FROM bets WHERE player=? AND ticket_id IN ({placeholders}) AND result='WINNING'",
+                  [player_id] + tid_list)
         max_win = c.fetchone()[0]
 
-        c.execute("SELECT max_streak FROM win_streaks WHERE player=?", (player_id,))
-        row = c.fetchone()
-        max_win_streak = row[0] if row else 0
+        # Win streak max within this period
+        c.execute(f"""
+            SELECT t.ticket_id FROM tickets t
+            WHERE t.ticket_id IN ({placeholders})
+            ORDER BY t.id ASC
+        """, tid_list)
+        ordered_tids = [r[0] for r in c.fetchall()]
+        max_ws = 0
+        cur_ws = 0
+        for tid in ordered_tids:
+            c.execute("SELECT result FROM bets WHERE ticket_id=? AND player=?", (tid, player_id))
+            results = [r[0] for r in c.fetchall()]
+            if not results or any(r in (None, "PENDING", "UNKNOWN") for r in results):
+                continue
+            if all(r in ("WINNING", "VOIDED", "WINNING_VOIDED") for r in results):
+                cur_ws += 1
+                max_ws = max(max_ws, cur_ws)
+            else:
+                cur_ws = 0
 
         win_rate = (guessed / total * 100) if total > 0 else 0
         leaderboard_data.append({
-            "name": name,
-            "player_id": player_id,
+            "name": name, "player_id": player_id,
             "win_rate": round(win_rate, 2),
             "avg_odds": round(avg_odds, 2) if avg_odds else 0,
             "max_win": max_win if max_win else 0,
-            "max_win_streak": max_win_streak,
+            "max_win_streak": max_ws,
             "guessed": guessed,
             "missed": missed,
             "voided": voided,
         })
 
+    leaderboard_data.sort(key=lambda x: (x["win_rate"], x["avg_odds"], -x["voided"]), reverse=True)
+
     # ── Payment calculation ───────────────────────────────────────────────────
-    # Uses per-ticket player snapshots — historical tickets are unaffected
-    # when players are added or removed.
-    c.execute("""
-        SELECT ticket_id FROM tickets
-        WHERE ticket_result IS NOT NULL AND ticket_result != 'PENDING'
-        ORDER BY id ASC
-    """)
-    resolved_ticket_ids = [row[0] for row in c.fetchall()]
+    resolved_ticket_ids = [tid for tid in ticket_ids]  # already ordered
 
-    payments = {pid: 0.0 for pid in PLAYER_NAMES}
-
+    payments = {pid: 0.0 for pid in player_names}
     for i, ticket_id in enumerate(resolved_ticket_ids):
-        # Snapshot of players on this ticket
         c.execute("SELECT player_id FROM ticket_players WHERE ticket_id=?", (ticket_id,))
         snap = c.fetchall()
         ticket_pids = [r[0] for r in snap] if snap else []
-
-        # Fallback for old tickets with no snapshot
         if not ticket_pids:
             c.execute("SELECT DISTINCT player FROM bets WHERE ticket_id=?", (ticket_id,))
             ticket_pids = [r[0] for r in c.fetchall()]
@@ -804,14 +857,11 @@ def leaderboard():
             continue
 
         if i == 0:
-            # First ticket: everyone pays €1
             for pid in ticket_pids:
                 if pid in payments:
                     payments[pid] += 1.0
         else:
             prev_ticket_id = resolved_ticket_ids[i - 1]
-
-            # Previous ticket's player snapshot
             c.execute("SELECT player_id FROM ticket_players WHERE ticket_id=?", (prev_ticket_id,))
             prev_snap = c.fetchall()
             prev_pids = [r[0] for r in prev_snap] if prev_snap else []
@@ -819,25 +869,19 @@ def leaderboard():
                 c.execute("SELECT DISTINCT player FROM bets WHERE ticket_id=?", (prev_ticket_id,))
                 prev_pids = [r[0] for r in c.fetchall()]
 
-            # New players joining pay €1 for themselves
             new_players = set(ticket_pids) - set(prev_pids)
             for pid in new_players:
                 if pid in payments:
                     payments[pid] += 1.0
 
-            # Losers from previous ticket cover the rest
             losers = set()
             for pid in prev_pids:
-                c.execute("""
-                    SELECT COUNT(*) FROM bets
-                    WHERE ticket_id=? AND player=? AND result='LOSING'
-                """, (prev_ticket_id, pid))
+                c.execute("SELECT COUNT(*) FROM bets WHERE ticket_id=? AND player=? AND result='LOSING'",
+                          (prev_ticket_id, pid))
                 if c.fetchone()[0] > 0:
                     losers.add(pid)
 
             if losers:
-                # Total ticket cost = num players on this ticket × €1
-                # minus what new players already paid
                 covered_by_new = len(new_players)
                 remaining_cost = num_on_ticket - covered_by_new
                 if remaining_cost > 0:
@@ -846,16 +890,104 @@ def leaderboard():
                         if pid in payments:
                             payments[pid] += cost_per_loser
 
-    conn.close()
-
-    leaderboard_data.sort(key=lambda x: (x["win_rate"], x["avg_odds"], -x["voided"]), reverse=True)
-
     payment_data = [
         {"name": row["name"], "total_paid": round(payments[row["player_id"]], 2)}
         for row in leaderboard_data
     ]
+    return leaderboard_data, payment_data
 
-    return render_template("leaderboard.html", data=leaderboard_data, payment_data=payment_data)
+
+@app.route("/create_period", methods=["POST"])
+def create_period():
+    if not session.get("admin_logged_in"):
+        return "Unauthorized", 403
+
+    name = request.form.get("period_name", "").strip()
+    start_date = request.form.get("period_start_date", "").strip()
+    if not name or not start_date:
+        return redirect("/leaderboard")
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    c.execute("INSERT INTO periods (name, start_date, created_at) VALUES (?, ?, ?)",
+              (name, start_date, now))
+    period_id = c.lastrowid
+
+    # Assign all tickets from start_date onward that don't already have a period
+    c.execute("""
+        UPDATE tickets SET period_id=?
+        WHERE created_at >= ? AND period_id IS NULL
+    """, (period_id, start_date))
+
+    conn.commit()
+    conn.close()
+    return redirect("/leaderboard")
+
+
+@app.route("/delete_period/<int:period_id>", methods=["POST"])
+def delete_period(period_id):
+    if not session.get("admin_logged_in"):
+        return "Unauthorized", 403
+
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    # Unlink tickets from this period before deleting
+    c.execute("UPDATE tickets SET period_id=NULL WHERE period_id=?", (period_id,))
+    c.execute("DELETE FROM periods WHERE id=?", (period_id,))
+    conn.commit()
+    conn.close()
+    return redirect("/leaderboard")
+
+
+@app.route("/leaderboard")
+def leaderboard():
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    PLAYER_NAMES = get_player_names(conn)
+
+    # ── Overall: all resolved tickets ────────────────────────────────────────
+    c.execute("""
+        SELECT ticket_id FROM tickets
+        WHERE ticket_result IS NOT NULL AND ticket_result != 'PENDING'
+        ORDER BY id ASC
+    """)
+    all_resolved = [r[0] for r in c.fetchall()]
+    overall_data, overall_payments = compute_leaderboard_stats(c, PLAYER_NAMES, all_resolved)
+
+    # ── Periods ───────────────────────────────────────────────────────────────
+    c.execute("SELECT id, name, start_date FROM periods ORDER BY start_date ASC")
+    periods_raw = c.fetchall()
+
+    period_tabs = []
+    for (pid, pname, pstart) in periods_raw:
+        c.execute("""
+            SELECT ticket_id FROM tickets
+            WHERE period_id=? AND ticket_result IS NOT NULL AND ticket_result != 'PENDING'
+            ORDER BY id ASC
+        """, (pid,))
+        period_tids = [r[0] for r in c.fetchall()]
+        pd_data, pd_payments = compute_leaderboard_stats(c, PLAYER_NAMES, period_tids)
+        period_tabs.append({
+            "id": pid,
+            "name": pname,
+            "start_date": pstart,
+            "data": pd_data,
+            "payment_data": pd_payments,
+            "ticket_count": len(period_tids),
+        })
+
+    conn.close()
+
+    return render_template(
+        "leaderboard.html",
+        data=overall_data,
+        payment_data=overall_payments,
+        period_tabs=period_tabs,
+        admin_logged_in=session.get("admin_logged_in"),
+    )
 
 
 # ---------------------------------------------------------------------------

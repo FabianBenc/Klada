@@ -11,7 +11,166 @@
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <style>
+        .tab-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0;
+            border-bottom: 2px solid var(--border);
+            margin-bottom: 20px;
+        }
+        .tab-btn {
+            padding: 8px 18px;
+            font-size: 12px;
+            font-weight: 600;
+            background: transparent;
+            color: var(--text-muted);
+            border: none !important;
+            border-bottom: 2px solid transparent !important;
+            margin-bottom: -2px;
+            cursor: pointer;
+            letter-spacing: 0.4px;
+            border-radius: 0;
+            box-shadow: none !important;
+            transition: color 0.15s;
+        }
+        .tab-btn:hover:not(.active) { color: var(--text); background: transparent; box-shadow: none !important; }
+        .tab-btn.active {
+            color: var(--accent) !important;
+            border-bottom: 2px solid var(--accent) !important;
+            background: transparent !important;
+        }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        .period-badge {
+            display: inline-block;
+            background: rgba(216,211,101,0.12);
+            border: 1px solid rgba(216,211,101,0.4);
+            color: var(--gold);
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 1px 7px;
+            letter-spacing: 0.5px;
+            margin-left: 5px;
+            vertical-align: middle;
+        }
+        .sort-note {
+            font-size: 12px;
+            margin-bottom: 12px;
+            color: var(--text-muted);
+        }
+        .sort-note strong { color: var(--text); }
+    </style>
 </head>
+
+{% macro render_tab(rows, payments, tab_id, title='', start_date='') %}
+<div>
+    {% if title %}
+    <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:4px;">
+        <h3 style="margin:0;">{{ title }}</h3>
+        <small style="color:var(--text-muted);">od {{ start_date }}</small>
+    </div>
+    {% endif %}
+
+    <h3 {% if title %}style="display:none"{% endif %}>Tablica zlatnih, srebrnih i broncanih</h3>
+    <p class="sort-note">
+        Poredak: <strong>1.</strong> % pogodaka &nbsp;›&nbsp;
+        <strong>2.</strong> prosječni tečaj &nbsp;›&nbsp;
+        <strong>3.</strong> manje void parova.
+        Void parovi se <em>ne</em> računaju u win rate.
+    </p>
+
+    <div class="table-wrap" style="margin-bottom:20px;">
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Igrač</th>
+                    <th>✅</th>
+                    <th>❌</th>
+                    <th>%</th>
+                    <th class="hide-mobile">Prosj. tečaj</th>
+                    <th class="hide-mobile">Najveći tečaj</th>
+                    <th class="hide-mobile" title="Broj void parova">🔘 Void</th>
+                    <th>🔥 Niz</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for player in rows %}
+                <tr>
+                    <td style="font-size:18px; text-align:center;">
+                        {% if loop.index == 1 %}🥇
+                        {% elif loop.index == 2 %}🥈
+                        {% elif loop.index == 3 %}🥉
+                        {% else %}<span style="color:var(--text-muted);">{{ loop.index }}</span>
+                        {% endif %}
+                    </td>
+                    <td style="font-weight:600;">{{ player.name }}</td>
+                    <td class="WON">{{ player.guessed }}</td>
+                    <td class="LOST">{{ player.missed }}</td>
+                    <td style="font-weight:600;">{{ player.win_rate }}%</td>
+                    <td class="hide-mobile" style="color:var(--text-muted);">{{ player.avg_odds }}</td>
+                    <td class="hide-mobile" style="color:var(--accent);">{{ player.max_win }}</td>
+                    <td class="hide-mobile">
+                        {% if player.voided > 0 %}<span style="color:var(--gold);">{{ player.voided }}</span>
+                        {% else %}–{% endif %}
+                    </td>
+                    <td>
+                        {% if player.max_win_streak > 0 %}
+                            <span style="color:var(--gold);">{{ player.max_win_streak }} 🔥</span>
+                        {% else %}
+                            <span style="color:var(--text-muted);">–</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <h3>📈 Kumulativni postotak pogotka</h3>
+    <div class="window" style="margin-bottom:16px;">
+        <div class="title-bar">
+            <div class="title-bar-text">Win rate po tiketu{% if title %} — {{ title }}{% endif %}</div>
+        </div>
+        <div class="window-body" style="padding:12px; background:var(--surface2);">
+            <canvas id="chart-{{ tab_id }}" style="width:100%; max-height:320px;"></canvas>
+            <p id="chart-empty-{{ tab_id }}" style="display:none; text-align:center; color:var(--text-muted); margin:24px 0;">
+                Nema dovoljno podataka za prikaz grafa.
+            </p>
+        </div>
+    </div>
+
+    <h3>💸 Ulaganja</h3>
+    <div class="table-wrap" style="margin-bottom:8px;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Igrač</th>
+                    <th>Ukupno plaćeno (€)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set sorted_payments = payments | sort(attribute='total_paid', reverse=true) %}
+                {% set max_paid = sorted_payments[0].total_paid if sorted_payments else 0 %}
+                {% for row in sorted_payments %}
+                <tr {% if row.total_paid == max_paid and max_paid > 0 %}style="background:rgba(255,68,68,0.08);"{% endif %}>
+                    <td style="font-weight:{% if row.total_paid == max_paid and max_paid > 0 %}700{% else %}400{% endif %};">
+                        {{ row.name }}
+                    </td>
+                    <td>
+                        <strong style="color:var(--red);">€{{ "%.2f"|format(row.total_paid) }}</strong>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endmacro %}
 
 <body>
 <div class="window">
@@ -25,100 +184,91 @@
             <div class="dropdown" style="display:none;">
                 <a href="/">⬅ Natrag na početnu</a>
                 <a href="/pravila">Pravila igre</a>
-                <a href="/login">Admin prijava</a>
+                {% if not admin_logged_in %}<a href="/login">Admin prijava</a>{% endif %}
             </div>
         </div>
     </div>
 
     <div class="window-body">
 
-        <h3>Tablica zlatnih, srebrnih i broncanih</h3>
-        <p style="font-size:12px; margin-bottom:12px; color:var(--text-muted);">
-            Poredak: <strong style="color:var(--text);">1.</strong> % pogodaka &nbsp;›&nbsp;
-            <strong style="color:var(--text);">2.</strong> prosječni tečaj &nbsp;›&nbsp;
-            <strong style="color:var(--text);">3.</strong> manje void parova. Void parovi se <em>ne</em> računaju u win rate.
-        </p>
-
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Igrač</th>
-                        <th>✅</th>
-                        <th>❌</th>
-                        <th>%</th>
-                        <th class="hide-mobile">Prosj. tečaj</th>
-                        <th class="hide-mobile">Najveći tečaj</th>
-                        <th class="hide-mobile" title="Broj void parova">🔘 Void</th>
-                        <th>🔥 Niz</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for player in data %}
-                    <tr>
-                        <td style="font-size:18px; text-align:center;">
-                            {% if loop.index == 1 %}🥇
-                            {% elif loop.index == 2 %}🥈
-                            {% elif loop.index == 3 %}🥉
-                            {% else %}<span style="color:var(--text-muted);">{{ loop.index }}</span>
-                            {% endif %}
-                        </td>
-                        <td style="font-weight:600;">{{ player.name }}</td>
-                        <td class="WON">{{ player.guessed }}</td>
-                        <td class="LOST">{{ player.missed }}</td>
-                        <td style="font-weight:600;">{{ player.win_rate }}%</td>
-                        <td class="hide-mobile" style="color:var(--text-muted);">{{ player.avg_odds }}</td>
-                        <td class="hide-mobile" style="color:var(--accent);">{{ player.max_win }}</td>
-                        <td class="hide-mobile" style="color:var(--text-muted);">{% if player.voided > 0 %}<span style="color:var(--gold);">{{ player.voided }}</span>{% else %}–{% endif %}</td>
-                        <td>{% if player.max_win_streak > 0 %}<span style="color:var(--gold);">{{ player.max_win_streak }} 🔥</span>{% else %}<span style="color:var(--text-muted);">–</span>{% endif %}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        <h3 style="margin-top:24px;">📈 Kumulativni postotak pogotka</h3>
-
-        <div class="window" style="margin-bottom:16px;">
-            <div class="title-bar">
-                <div class="title-bar-text">Win rate po tiketu</div>
+        <!-- ── Admin: Period Management ─────────────────────────────────── -->
+        {% if admin_logged_in %}
+        <div class="window" style="margin-bottom:20px;" id="periodPanel">
+            <div class="title-bar" style="padding:8px 14px; cursor:pointer;"
+                 onclick="var b=this.nextElementSibling; b.style.display=b.style.display==='none'?'block':'none'; this.querySelector('.toggle-arrow').textContent=b.style.display==='none'?'▼ Otvori':'▲ Zatvori'">
+                <div class="title-bar-text" style="font-size:13px;">🔒 Upravljanje periodima</div>
+                <span class="toggle-arrow" style="margin-left:auto; color:var(--text-muted); font-size:11px;">▼ Otvori</span>
             </div>
-            <div class="window-body" style="padding:12px; background:var(--surface2);">
-                <canvas id="winRateChart" style="width:100%; max-height:320px;"></canvas>
-                <p id="chart-empty" style="display:none; text-align:center; color:var(--text-muted); margin:24px 0;">
-                    Nema dovoljno podataka za prikaz grafa.
+            <div class="window-body" style="display:none; padding:14px 16px;">
+
+                <p style="margin-bottom:14px; font-size:13px; color:var(--text-muted);">
+                    Kreiraj novi period da "zaključaš" praćenje od odabranog datuma.
+                    Svi tiketi od tog datuma nadalje bit će grupirani u zasebnu tablicu i prikazani
+                    expanded (otvoreni) na glavnoj stranici. Ukupni poredak uvijek ostaje ažuran.
                 </p>
+
+                <form method="POST" action="/create_period" style="margin-bottom:0;">
+                    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
+                        <div class="field-row-stacked" style="margin-bottom:0;">
+                            <label>Naziv perioda</label>
+                            <input type="text" name="period_name" placeholder="npr. Sezona 2 — travanj" required style="width:220px;">
+                        </div>
+                        <div class="field-row-stacked" style="margin-bottom:0;">
+                            <label>Početni datum (tiketi od tog datuma ulaze u period)</label>
+                            <input type="date" name="period_start_date" required
+                                   style="background:var(--surface3) !important; border:1px solid var(--border) !important;
+                                          border-radius:6px !important; padding:7px 10px !important;
+                                          color:var(--text) !important; font-family:Inter,sans-serif; font-size:13px;">
+                        </div>
+                        <button type="submit" style="white-space:nowrap; height:34px;">+ Kreiraj period</button>
+                    </div>
+                </form>
+
+                {% if period_tabs %}
+                <hr style="margin:16px 0;">
+                <p style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.8px; margin-bottom:10px;">Postojeći periodi</p>
+                {% for pt in period_tabs %}
+                <div style="display:flex; align-items:center; gap:10px; padding:8px 12px;
+                            background:var(--surface2); border-radius:6px; margin-bottom:6px;
+                            border:1px solid var(--border);">
+                    <span style="font-weight:600; color:var(--text);">{{ pt.name }}</span>
+                    <span style="color:var(--text-muted); font-size:12px;">od {{ pt.start_date }}</span>
+                    <span class="period-badge">{{ pt.ticket_count }} tiketa</span>
+                    <form method="POST" action="/delete_period/{{ pt.id }}" style="margin-left:auto; margin-bottom:0;"
+                          onsubmit="return confirm('Obrisati period \'{{ pt.name }}\'? Tiketi ostaju, samo se odvezuju od perioda.')">
+                        <button type="submit"
+                                style="background:var(--red) !important; color:white !important;
+                                       padding:2px 10px; font-size:11px; height:auto;">Obriši</button>
+                    </form>
+                </div>
+                {% endfor %}
+                {% endif %}
+
             </div>
         </div>
+        {% endif %}
 
-        <h3 style="margin-top:8px;">💸 Ulaganja</h3>
-
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Igrač</th>
-                        <th>Ukupno plaćeno (€)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% set sorted_payments = payment_data | sort(attribute='total_paid', reverse=true) %}
-                    {% set max_paid = sorted_payments[0].total_paid if sorted_payments else 0 %}
-
-                    {% for row in sorted_payments %}
-                    <tr {% if row.total_paid == max_paid %}style="background: rgba(255,68,68,0.08);"{% endif %}>
-                        <td style="font-weight:{% if row.total_paid == max_paid %}700{% else %}400{% endif %};">
-                            {{ row.name }}
-                        </td>
-                        <td>
-                            <strong style="color: var(--red);">€{{ "%.2f"|format(row.total_paid) }}</strong>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <!-- ── Tab Bar ──────────────────────────────────────────────────── -->
+        <div class="tab-bar">
+            <button class="tab-btn active" onclick="switchTab('overall', this)">🌐 Ukupno</button>
+            {% for pt in period_tabs %}
+            <button class="tab-btn" onclick="switchTab('period-{{ pt.id }}', this)">
+                {{ pt.name }}<span class="period-badge">{{ pt.ticket_count }}</span>
+            </button>
+            {% endfor %}
         </div>
+
+        <!-- ── OVERALL TAB ───────────────────────────────────────────────── -->
+        <div class="tab-panel active" id="tab-overall">
+            {{ render_tab(data, payment_data, 'overall') }}
+        </div>
+
+        <!-- ── PERIOD TABS ───────────────────────────────────────────────── -->
+        {% for pt in period_tabs %}
+        <div class="tab-panel" id="tab-period-{{ pt.id }}">
+            {{ render_tab(pt.data, pt.payment_data, 'period-' ~ pt.id, pt.name, pt.start_date) }}
+        </div>
+        {% endfor %}
 
     </div>
 </div>
@@ -130,73 +280,95 @@
         });
     });
 
+    function switchTab(id, btn) {
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('tab-' + id).classList.add('active');
+        btn.classList.add('active');
+        drawChart(id);
+    }
+
     const COLORS = [
         '#00d4ff','#ff6b35','#00e676','#ffd700',
         '#ff4081','#b388ff','#64ffda','#ffab40',
     ];
+    const drawnCharts = {};
 
-    fetch('/chart-data')
-        .then(r => r.json())
-        .then(data => {
-            if (!data.labels || data.labels.length < 2) {
-                document.getElementById('chart-empty').style.display = 'block';
-                return;
-            }
+    function drawChart(tabId) {
+        if (drawnCharts[tabId]) return;
 
-            const datasets = data.datasets.map((ds, i) => ({
-                label: ds.label,
-                data: ds.data,
-                borderColor: COLORS[i % COLORS.length],
-                backgroundColor: COLORS[i % COLORS.length] + '15',
-                tension: 0.4,
-                pointRadius: 5,
-                pointHoverRadius: 8,
-                pointBackgroundColor: COLORS[i % COLORS.length],
-                pointBorderColor: '#0a0e1a',
-                pointBorderWidth: 2,
-                fill: false,
-                borderWidth: 2.5,
-            }));
+        let url = '/chart-data';
+        if (tabId.startsWith('period-')) {
+            url = '/chart-data?period=' + tabId.replace('period-', '');
+        }
 
-            new Chart(document.getElementById('winRateChart'), {
-                type: 'line',
-                data: { labels: data.labels, datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: { color: '#7a8aaa', font: { family: 'Inter', size: 12 }, padding: 16 }
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                if (!data.labels || data.labels.length < 2) {
+                    const el = document.getElementById('chart-empty-' + tabId);
+                    if (el) el.style.display = 'block';
+                    return;
+                }
+                const canvas = document.getElementById('chart-' + tabId);
+                if (!canvas) return;
+
+                const datasets = data.datasets.map((ds, i) => ({
+                    label: ds.label,
+                    data: ds.data,
+                    borderColor: COLORS[i % COLORS.length],
+                    backgroundColor: COLORS[i % COLORS.length] + '15',
+                    tension: 0.4,
+                    pointRadius: 5,
+                    pointHoverRadius: 8,
+                    pointBackgroundColor: COLORS[i % COLORS.length],
+                    pointBorderColor: '#0a0e1a',
+                    pointBorderWidth: 2,
+                    fill: false,
+                    borderWidth: 2.5,
+                }));
+
+                drawnCharts[tabId] = new Chart(canvas, {
+                    type: 'line',
+                    data: { labels: data.labels, datasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: { color: '#7a8aaa', font: { family: 'Inter', size: 12 }, padding: 16 }
+                            },
+                            tooltip: {
+                                backgroundColor: '#1a2235',
+                                borderColor: '#2a3a55',
+                                borderWidth: 1,
+                                titleColor: '#e8edf5',
+                                bodyColor: '#7a8aaa',
+                                callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}%` }
+                            }
                         },
-                        tooltip: {
-                            backgroundColor: '#1a2235',
-                            borderColor: '#2a3a55',
-                            borderWidth: 1,
-                            titleColor: '#e8edf5',
-                            bodyColor: '#7a8aaa',
-                            callbacks: {
-                                label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}%`
+                        scales: {
+                            y: {
+                                min: 0, max: 100,
+                                ticks: { callback: v => v + '%', color: '#7a8aaa', font: { family: 'Inter' } },
+                                grid: { color: '#2a3a55' },
+                                border: { color: '#2a3a55' }
+                            },
+                            x: {
+                                grid: { color: '#2a3a55' },
+                                border: { color: '#2a3a55' },
+                                ticks: { maxRotation: 45, color: '#7a8aaa', font: { size: 11, family: 'Inter' } }
                             }
                         }
-                    },
-                    scales: {
-                        y: {
-                            min: 0, max: 100,
-                            ticks: { callback: v => v + '%', color: '#7a8aaa', font: { family: 'Inter' } },
-                            grid: { color: '#2a3a55' },
-                            border: { color: '#2a3a55' }
-                        },
-                        x: {
-                            grid: { color: '#2a3a55' },
-                            border: { color: '#2a3a55' },
-                            ticks: { maxRotation: 45, color: '#7a8aaa', font: { size: 11, family: 'Inter' } }
-                        }
                     }
-                }
+                });
             });
-        });
+    }
+
+    // Draw overall chart immediately
+    drawChart('overall');
 </script>
 
 </body>
