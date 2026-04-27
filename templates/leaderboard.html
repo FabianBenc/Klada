@@ -92,10 +92,10 @@
                     <th>Igrač</th>
                     <th><i data-lucide="check-circle-2" style="width:13px;height:13px;color:#4ade80;vertical-align:middle;"></i></th>
                     <th><i data-lucide="x-circle" style="width:13px;height:13px;color:var(--red);vertical-align:middle;"></i></th>
+                    <th class="hide-mobile" title="Broj poništenih parova"><i data-lucide="minus-circle" style="width:13px;height:13px;color:var(--text-muted);vertical-align:middle;margin-right:3px;"></i>Poništen</th>
                     <th>%</th>
                     <th class="hide-mobile">Prosj. tečaj</th>
                     <th class="hide-mobile">Najveći tečaj</th>
-                    <th class="hide-mobile" title="Broj poništenih parova"><i data-lucide="minus-circle" style="width:13px;height:13px;color:var(--text-muted);vertical-align:middle;margin-right:3px;"></i>Poništen</th>
                     <th><i data-lucide="flame" style="width:13px;height:13px;color:var(--accent);vertical-align:middle;margin-right:3px;"></i>Niz</th>
                 </tr>
             </thead>
@@ -112,13 +112,13 @@
                     <td style="font-weight:600;">{{ player.name }}</td>
                     <td class="WON">{{ player.guessed }}</td>
                     <td class="LOST">{{ player.missed }}</td>
+                    <td class="hide-mobile" style="color:var(--text-muted);">
+                        {% if player.voided > 0 %}<span style="color:var(--text-muted);">{{ player.voided }}</span>
+                        {% else %}–{% endif %}
+                    </td>
                     <td style="font-weight:600;">{{ player.win_rate }}%</td>
                     <td class="hide-mobile" style="color:var(--text-muted);">{{ player.avg_odds }}</td>
                     <td class="hide-mobile" style="color:var(--accent);">{{ player.max_win }}</td>
-                    <td class="hide-mobile">
-                        {% if player.voided > 0 %}<span style="color:var(--gold);">{{ player.voided }}</span>
-                        {% else %}–{% endif %}
-                    </td>
                     <td>
                         {% if player.max_win_streak > 0 %}
                             <span style="color:var(--gold);">{{ player.max_win_streak }} <i data-lucide="flame" style="width:12px;height:12px;vertical-align:middle;"></i></span>

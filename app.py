@@ -6,6 +6,7 @@ import threading
 import time
 import os
 from urllib.parse import urlparse, parse_qs
+from zoneinfo import ZoneInfo
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"  # Change in production
@@ -244,7 +245,7 @@ def fetch_data(ticket_id):
 def parse_psk_date(iso_string):
     try:
         dt = datetime.strptime(iso_string, "%Y-%m-%dT%H:%M:%SZ")
-        dt = dt.replace(tzinfo=timezone.utc).astimezone()
+        dt = dt.replace(tzinfo=ZoneInfo("UTC")).astimezone(ZoneInfo("Europe/Zagreb"))
         return dt.strftime("%Y-%m-%d %H:%M")
     except Exception:
         return datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -335,13 +336,10 @@ def save_ticket(ticket_number, data):
         selections = market.get("selections") or []
         if selections:
             selection_name = selections[0].get("name") or None        # "1"
-        # Store as "1 (3:2)" — outcome picked + final score
-        if outcome_result and selection_name:
-            score = f"{selection_name} ({outcome_result})"
-        elif selection_name:
-            score = selection_name
-        elif outcome_result:
-            score = outcome_result
+        # Only store when outcomeResult is available (match has finished).
+        # If outcomeResult is null the match is still pending — store None.
+        if outcome_result:
+            score = f"{selection_name} ({outcome_result})" if selection_name else outcome_result
         else:
             score = None
         c.execute("""
@@ -491,12 +489,8 @@ def update_ticket_results():
             selections = market.get("selections") or []
             if selections:
                 selection_name = selections[0].get("name") or None
-            if outcome_result and selection_name:
-                score = f"{selection_name} ({outcome_result})"
-            elif selection_name:
-                score = selection_name
-            elif outcome_result:
-                score = outcome_result
+            if outcome_result:
+                score = f"{selection_name} ({outcome_result})" if selection_name else outcome_result
             else:
                 score = None
             c.execute("""
@@ -521,7 +515,7 @@ def update_ticket_results():
 def auto_update():
     while True:
         update_ticket_results()
-        time.sleep(86400)
+        time.sleep(5400)  # 1.5 hours
 
 
 # ---------------------------------------------------------------------------
