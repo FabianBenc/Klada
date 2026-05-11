@@ -780,7 +780,7 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
         if not ticket_set:
             leaderboard_data.append({
                 "name": name, "player_id": player_id,
-                "win_rate": 0, "avg_odds": 0, "max_win": 0,
+                "points": 0, "avg_odds": 0, "max_win": 0,
                 "max_win_streak": 0, "guessed": 0, "missed": 0, "voided": 0,
             })
             continue
@@ -836,10 +836,10 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
             else:
                 cur_ws = 0
 
-        win_rate = (guessed / total * 100) if total > 0 else 0
+        points = (guessed * 3) + (voided * 1)
         leaderboard_data.append({
             "name": name, "player_id": player_id,
-            "win_rate": round(win_rate, 2),
+            "points": points,
             "avg_odds": round(avg_odds, 2) if avg_odds else 0,
             "max_win": max_win if max_win else 0,
             "max_win_streak": max_ws,
@@ -848,7 +848,7 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
             "voided": voided,
         })
 
-    leaderboard_data.sort(key=lambda x: (x["win_rate"], x["avg_odds"], -x["voided"]), reverse=True)
+    leaderboard_data.sort(key=lambda x: (x["points"], x["avg_odds"]), reverse=True)
 
     # ── Payment calculation ───────────────────────────────────────────────────
     resolved_ticket_ids = [tid for tid in ticket_ids]  # already ordered
