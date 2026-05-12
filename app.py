@@ -298,10 +298,22 @@ def save_ticket(ticket_number, data):
             except (TypeError, ValueError):
                 payout = None
 
+    # Assign to the most recent period whose start_date <= ticket date
+    period_id = None
+    ticket_date = psk_created[:10]  # "YYYY-MM-DD"
     c.execute("""
-        INSERT INTO tickets (ticket_id, ticket_number, created_at, last_updated, ticket_jwt, ticket_result, payout)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (ticket_id, number, psk_created, now, ticket_number, data.get("result"), payout))
+        SELECT id FROM periods
+        WHERE start_date <= ?
+        ORDER BY start_date DESC LIMIT 1
+    """, (ticket_date,))
+    row = c.fetchone()
+    if row:
+        period_id = row[0]
+
+    c.execute("""
+        INSERT INTO tickets (ticket_id, ticket_number, created_at, last_updated, ticket_jwt, ticket_result, payout, period_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (ticket_id, number, psk_created, now, ticket_number, data.get("result"), payout, period_id))
 
     # Determine which players were eligible for this ticket based on join date.
     # This is the critical fix: when re-importing old tickets after a DB reset,
@@ -473,7 +485,6 @@ def update_ticket_results():
         JOIN bets b ON t.ticket_id = b.ticket_id
         WHERE b.result IS NULL OR b.result = 'PENDING' OR b.result = 'UNKNOWN'
         ORDER BY t.id DESC
-        LIMIT 2
     """)
     tickets = c.fetchall()
     for (ticket_id, ticket_jwt) in tickets:
@@ -603,15 +614,24 @@ def remove_player(player_id):
 
 @app.route("/", methods=["GET", "POST"])
 def index():
+    submit_error = None
+
     if request.method == "POST":
         if not session.get("admin_logged_in"):
             return "Unauthorized", 403
 
-        ticket_number = request.form.get("ticket_number").strip()
-        ticket_id = extract_ticket_id(ticket_number)
-        data = fetch_data(ticket_id)
-        save_ticket(ticket_id, data)
-        return redirect("/")
+        conn_check = sqlite3.connect(DB_NAME)
+        period_count = conn_check.execute("SELECT COUNT(*) FROM periods").fetchone()[0]
+        conn_check.close()
+
+        if period_count == 0:
+            submit_error = "Nije moguće dodati tiket — najprije kreirajte period na stranici Poredak."
+        else:
+            ticket_number = request.form.get("ticket_number").strip()
+            ticket_id = extract_ticket_id(ticket_number)
+            data = fetch_data(ticket_id)
+            save_ticket(ticket_id, data)
+            return redirect("/")
 
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -648,6 +668,7 @@ def index():
         normalize_result=normalize_result,
         periods=periods,
         period_ids=period_ids,
+        submit_error=submit_error,
     )
 
 
@@ -780,7 +801,7 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
         if not ticket_set:
             leaderboard_data.append({
                 "name": name, "player_id": player_id,
-                "win_rate": 0, "avg_odds": 0, "max_win": 0,
+                "score_pts": 0, "avg_odds": 0, "max_win": 0,
                 "max_win_streak": 0, "guessed": 0, "missed": 0, "voided": 0,
             })
             continue
@@ -836,10 +857,21 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
             else:
                 cur_ws = 0
 
-        win_rate = (guessed / total * 100) if total > 0 else 0
+        # Score: WINNING = 1+odds, VOIDED = 0+odds, LOSING = -2-odds
+        c.execute(f"SELECT COALESCE(SUM(1+odds),0) FROM bets WHERE player=? AND ticket_id IN ({placeholders}) AND result='WINNING'",
+                  [player_id] + tid_list)
+        s_win = c.fetchone()[0] or 0
+        c.execute(f"SELECT COALESCE(SUM(odds),0) FROM bets WHERE player=? AND ticket_id IN ({placeholders}) AND result IN ('VOIDED','WINNING_VOIDED')",
+                  [player_id] + tid_list)
+        s_void = c.fetchone()[0] or 0
+        c.execute(f"SELECT COALESCE(SUM(-2-odds),0) FROM bets WHERE player=? AND ticket_id IN ({placeholders}) AND result='LOSING'",
+                  [player_id] + tid_list)
+        s_lose = c.fetchone()[0] or 0
+        score_pts = round(s_win + s_void + s_lose, 2)
+
         leaderboard_data.append({
             "name": name, "player_id": player_id,
-            "win_rate": round(win_rate, 2),
+            "score_pts": score_pts,
             "avg_odds": round(avg_odds, 2) if avg_odds else 0,
             "max_win": max_win if max_win else 0,
             "max_win_streak": max_ws,
@@ -848,7 +880,7 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
             "voided": voided,
         })
 
-    leaderboard_data.sort(key=lambda x: (x["win_rate"], x["avg_odds"], -x["voided"]), reverse=True)
+    leaderboard_data.sort(key=lambda x: (x["guessed"], x["avg_odds"]), reverse=True)
 
     # ── Payment calculation ───────────────────────────────────────────────────
     resolved_ticket_ids = [tid for tid in ticket_ids]  # already ordered
@@ -1022,10 +1054,6 @@ def leaderboard():
     )
 
 
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
-
 @app.route("/players")
 def players_redirect():
     names = get_active_player_names()
@@ -1047,13 +1075,11 @@ def player_profile(player_id):
 
     player_name = player_names[player_id]
 
-    # All bets for this player joined with ticket info, newest first
     c.execute("""
-        SELECT
-            b.id, b.ticket_id, b.fixture_name, b.odds, b.result,
-            b.start_time, b.score,
-            t.created_at, t.ticket_result, t.ticket_jwt,
-            p.name AS period_name
+        SELECT b.id, b.ticket_id, b.fixture_name, b.odds, b.result,
+               b.start_time, b.score,
+               t.created_at, t.ticket_result, t.ticket_jwt,
+               p.name AS period_name
         FROM bets b
         JOIN tickets t ON t.ticket_id = b.ticket_id
         LEFT JOIN periods p ON p.id = t.period_id
@@ -1062,7 +1088,6 @@ def player_profile(player_id):
     """, (player_id,))
     rows = c.fetchall()
 
-    # Group by ticket
     from collections import OrderedDict
     tickets_grouped = OrderedDict()
     for row in rows:
@@ -1084,30 +1109,20 @@ def player_profile(player_id):
             "score":        row[6],
         })
 
-    # Summary stats
     c.execute("SELECT COUNT(*) FROM bets WHERE player=? AND result='WINNING'", (player_id,))
     total_won = c.fetchone()[0]
-
     c.execute("SELECT COUNT(*) FROM bets WHERE player=? AND result='LOSING'", (player_id,))
     total_lost = c.fetchone()[0]
-
     c.execute("SELECT COUNT(*) FROM bets WHERE player=? AND result IN ('VOIDED','WINNING_VOIDED')", (player_id,))
     total_voided = c.fetchone()[0]
-
-    c.execute("""
-        SELECT COUNT(*) FROM bets WHERE player=?
+    c.execute("""SELECT COUNT(*) FROM bets WHERE player=?
         AND result NOT IN ('UNKNOWN','PENDING','VOIDED','WINNING_VOIDED')
-        AND result IS NOT NULL
-    """, (player_id,))
+        AND result IS NOT NULL""", (player_id,))
     total_resolved = c.fetchone()[0]
-
     c.execute("SELECT AVG(odds) FROM bets WHERE player=? AND result='WINNING'", (player_id,))
     avg_odds_won = c.fetchone()[0]
-
     c.execute("SELECT MAX(odds) FROM bets WHERE player=? AND result='WINNING'", (player_id,))
     best_odds = c.fetchone()[0]
-
-    # Score: +1+odds won, +odds voided, -2-odds lost
     c.execute("SELECT COALESCE(SUM(1+odds),0) FROM bets WHERE player=? AND result='WINNING'", (player_id,))
     s_win = c.fetchone()[0] or 0
     c.execute("SELECT COALESCE(SUM(odds),0) FROM bets WHERE player=? AND result IN ('VOIDED','WINNING_VOIDED')", (player_id,))
@@ -1115,15 +1130,10 @@ def player_profile(player_id):
     c.execute("SELECT COALESCE(SUM(-2-odds),0) FROM bets WHERE player=? AND result='LOSING'", (player_id,))
     s_lose = c.fetchone()[0] or 0
     score_pts = round(s_win + s_void + s_lose, 2)
-
     c.execute("SELECT streak FROM loss_streaks WHERE player=?", (player_id,))
-    r = c.fetchone()
-    loss_streak = r[0] if r else 0
-
+    r = c.fetchone(); loss_streak = r[0] if r else 0
     c.execute("SELECT streak, max_streak FROM win_streaks WHERE player=?", (player_id,))
-    r = c.fetchone()
-    win_streak = r[0] if r else 0
-    max_win_streak = r[1] if r else 0
+    r = c.fetchone(); win_streak = r[0] if r else 0; max_win_streak = r[1] if r else 0
 
     all_players = get_all_players_with_status(conn)
     conn.close()
@@ -1137,22 +1147,23 @@ def player_profile(player_id):
         tickets=list(tickets_grouped.values()),
         all_players=all_players,
         stats={
-            "total_won":      total_won,
-            "total_lost":     total_lost,
-            "total_voided":   total_voided,
-            "total_resolved": total_resolved,
-            "win_rate":       win_rate,
-            "avg_odds_won":   round(avg_odds_won, 2) if avg_odds_won else 0,
-            "best_odds":      best_odds if best_odds else 0,
-            "score_pts":      score_pts,
-            "win_streak":     win_streak,
-            "max_win_streak": max_win_streak,
-            "loss_streak":    loss_streak,
+            "total_won": total_won, "total_lost": total_lost,
+            "total_voided": total_voided, "total_resolved": total_resolved,
+            "win_rate": win_rate,
+            "avg_odds_won": round(avg_odds_won, 2) if avg_odds_won else 0,
+            "best_odds": best_odds if best_odds else 0,
+            "score_pts": score_pts,
+            "win_streak": win_streak, "max_win_streak": max_win_streak,
+            "loss_streak": loss_streak,
         },
         normalize_result=normalize_result,
         admin_logged_in=session.get("admin_logged_in"),
     )
 
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     init_db()
