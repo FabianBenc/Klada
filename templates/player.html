@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='icon.png') }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ player_name }} – Propali Kladioničari</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <style>
+        /* ── stat cards ── */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .stat-card .label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-muted);
+        }
+        .stat-card .value {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text);
+            line-height: 1.1;
+        }
+        .stat-card .sub {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* ── player switcher ── */
+        .player-switcher {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 18px;
+        }
+        .player-pill {
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            background: var(--surface2);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+            text-decoration: none;
+            transition: background 0.15s, color 0.15s;
+        }
+        .player-pill:hover { background: var(--surface3); color: #0d0d0d; opacity: 1; }
+        .player-pill.active { background: var(--accent); color: #0d0d0d; border-color: var(--accent); }
+
+        /* ── leg rows ── */
+        .leg-row {
+            display: grid;
+            grid-template-columns: 1fr auto auto auto;
+            gap: 8px;
+            align-items: center;
+            padding: 8px 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            font-size: 13px;
+        }
+        .leg-row:last-child { border-bottom: none; }
+        .leg-fixture { font-weight: 500; color: var(--text); }
+        .leg-meta    { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+        .leg-odds    { font-weight: 700; color: var(--accent); min-width: 38px; text-align: right; }
+        .leg-score   { font-size: 12px; color: var(--text-muted); min-width: 80px; text-align: right; }
+        .leg-result  { min-width: 80px; text-align: right; font-size: 12px; font-weight: 700; }
+
+        .res-WINNING { color: var(--green); }
+        .res-LOSING  { color: var(--red); }
+        .res-VOIDED  { color: var(--text-muted); }
+        .res-PENDING { color: var(--gold); }
+
+        /* ── ticket block ── */
+        .ticket-block {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+        .ticket-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 12px;
+            cursor: pointer;
+            user-select: none;
+            border-bottom: 1px solid var(--border);
+        }
+        .ticket-header:hover { background: rgba(255,255,255,0.03); }
+        .ticket-header .t-date { font-size: 12px; color: var(--text-muted); }
+        .ticket-header .t-result { font-size: 11px; font-weight: 700; margin-left: auto; }
+        .ticket-header .t-period { font-size: 10px; background: rgba(0,173,181,0.15);
+            border: 1px solid rgba(0,173,181,0.3); color: var(--accent);
+            border-radius: 20px; padding: 1px 8px; }
+        .ticket-header .t-toggle { color: var(--text-muted); font-size: 11px; transition: transform 0.2s; }
+        .ticket-body { display: none; }
+        .ticket-body.open { display: block; }
+
+        /* ── score legend ── */
+        .score-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 14px;
+            padding: 8px 12px;
+            background: var(--surface2);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+        .score-legend span strong { color: var(--text); }
+
+        /* ── filter bar ── */
+        .filter-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 14px;
+            align-items: center;
+        }
+    </style>
+</head>
+
+<body>
+<div class="window">
+    <div class="title-bar" style="padding:12px 18px;">
+        <div class="title-bar-text">
+            <span class="app-title">{{ player_name }}</span>
+        </div>
+    </div>
+
+    <div class="menu-bar">
+        <div class="menu-item" onclick="this.querySelector('.dropdown').style.display = this.querySelector('.dropdown').style.display === 'flex' ? 'none' : 'flex'">
+            <i data-lucide="menu" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Navigacija
+            <div class="dropdown" style="display:none;">
+                <a href="/"><i data-lucide="home" style="width:13px;height:13px;"></i>Početna</a>
+                <a href="/leaderboard"><i data-lucide="trophy" style="width:13px;height:13px;"></i>Poredak</a>
+                <a href="/pravila"><i data-lucide="book-open" style="width:13px;height:13px;"></i>Pravila igre</a>
+                {% if not admin_logged_in %}<a href="/login"><i data-lucide="log-in" style="width:13px;height:13px;"></i>Admin prijava</a>{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="window-body">
+
+        <!-- ── Player switcher ── -->
+        <div class="player-switcher">
+            {% for p in all_players %}
+            <a href="/player/{{ p.id }}"
+               class="player-pill {% if p.id == player_id %}active{% endif %}">
+                {{ p.name }}
+            </a>
+            {% endfor %}
+        </div>
+
+        <!-- ── Stat cards ── -->
+        <div class="stat-grid">
+            <div class="stat-card">
+                <div class="label">Pogoci</div>
+                <div class="value" style="color:var(--green);">{{ stats.total_won }}</div>
+                <div class="sub">od {{ stats.total_resolved }} parova</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Promašaji</div>
+                <div class="value" style="color:var(--red);">{{ stats.total_lost }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Poništeni</div>
+                <div class="value" style="color:var(--text-muted);">{{ stats.total_voided }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Win rate</div>
+                <div class="value">{{ stats.win_rate }}<span style="font-size:14px; font-weight:400;">%</span></div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Score</div>
+                <div class="value" style="color:{% if stats.score_pts >= 0 %}var(--accent){% else %}var(--red){% endif %};">
+                    {% if stats.score_pts >= 0 %}+{% endif %}{{ stats.score_pts }}
+                </div>
+                <div class="sub">+1+tečaj / +tečaj / −2−tečaj</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Prosj. tečaj</div>
+                <div class="value">{{ stats.avg_odds_won }}</div>
+                <div class="sub">na pogocima</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Najveći tečaj</div>
+                <div class="value" style="color:var(--accent);">{{ stats.best_odds }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Max. niz</div>
+                <div class="value">{{ stats.max_win_streak }}</div>
+                <div class="sub">
+                    {% if stats.win_streak > 0 %}
+                        Trenutni: {{ stats.win_streak }} 🔥
+                    {% elif stats.loss_streak > 0 %}
+                        Gubitaški: {{ stats.loss_streak }}
+                    {% else %}–{% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Score legend ── -->
+        <div class="score-legend">
+            <span><strong>Score formula:</strong></span>
+            <span>✅ Pogodak: <strong>+1 + tečaj</strong></span>
+            <span>🔘 Poništen: <strong>+tečaj</strong></span>
+            <span>❌ Promašaj: <strong>−2 − tečaj</strong></span>
+        </div>
+
+        <!-- ── Filter bar ── -->
+        <div class="filter-bar">
+            <span style="font-size:12px; color:var(--text-muted); margin-right:4px;">Prikaži:</span>
+            <button class="filter-btn active-filter" onclick="filterLegs('ALL', this)">Sve</button>
+            <button class="filter-btn" onclick="filterLegs('WINNING', this)">✅ Pogoci</button>
+            <button class="filter-btn" onclick="filterLegs('LOSING', this)">❌ Promašaji</button>
+            <button class="filter-btn" onclick="filterLegs('VOIDED', this)">🔘 Poništeni</button>
+            <button class="filter-btn" onclick="filterLegs('PENDING', this)">⏳ U tijeku</button>
+            <span style="margin-left:auto; font-size:12px; color:var(--text-muted);" id="legCount"></span>
+        </div>
+
+        <!-- ── Ticket list ── -->
+        <div id="ticketList">
+        {% for ticket in tickets %}
+        {% set t_status = normalize_result(ticket.ticket_result) %}
+        <div class="ticket-block" data-ticket="{{ ticket.ticket_id }}">
+            <div class="ticket-header" onclick="toggleTicket(this)">
+                <i data-lucide="ticket"
+                   style="width:14px;height:14px;
+                   color:{% if t_status == 'WINNING' %}var(--green){% elif t_status == 'LOSING' %}var(--red){% else %}var(--text-muted){% endif %};
+                   flex-shrink:0;"></i>
+                <span class="t-date">{{ ticket.created_at }}</span>
+                {% if ticket.period_name %}
+                <span class="t-period">{{ ticket.period_name }}</span>
+                {% endif %}
+                {% if ticket.ticket_jwt %}
+                <a href="https://applink.psk.hr/ticketdetail?id={{ ticket.ticket_jwt }}&source=SB"
+                   target="_blank"
+                   onclick="event.stopPropagation()"
+                   style="font-size:11px; color:var(--accent); margin-left:4px;">
+                    <i data-lucide="external-link" style="width:11px;height:11px;vertical-align:middle;"></i>
+                </a>
+                {% endif %}
+                <span class="t-result
+                    {% if t_status == 'WINNING' %}res-WINNING
+                    {% elif t_status == 'LOSING' %}res-LOSING
+                    {% else %}res-PENDING{% endif %}">
+                    {% if t_status == 'WINNING' %}✅ Dobitan
+                    {% elif t_status == 'LOSING' %}❌ Izgubljen
+                    {% else %}⏳ U tijeku{% endif %}
+                </span>
+                <span class="t-toggle">▼</span>
+            </div>
+            <div class="ticket-body open">
+                {% for leg in ticket.legs %}
+                {% set r = normalize_result(leg.result) %}
+                <div class="leg-row" data-result="{{ r }}">
+                    <div>
+                        <div class="leg-fixture">{{ leg.fixture_name }}</div>
+                        <div class="leg-meta">
+                            {% if leg.start_time %}{{ leg.start_time }}{% endif %}
+                        </div>
+                    </div>
+                    <div class="leg-score">{{ leg.score or '–' }}</div>
+                    <div class="leg-odds">{{ leg.odds }}</div>
+                    <div class="leg-result res-{{ r }}">
+                        {% if r == 'WINNING' %}✅ Pogodak
+                        {% elif r == 'LOSING' %}❌ Promašaj
+                        {% elif r == 'VOIDED' %}🔘 Poništen
+                        {% else %}⏳ U tijeku
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <p style="color:var(--text-muted); padding:20px 0; text-align:center;">Nema evidentiranih parova.</p>
+        {% endfor %}
+        </div>
+
+    </div>
+</div>
+
+<script>
+    document.addEventListener('click', function(e) {
+        document.querySelectorAll('.dropdown').forEach(d => {
+            if (!d.parentElement.contains(e.target)) d.style.display = 'none';
+        });
+    });
+
+    lucide.createIcons();
+
+    // ── Toggle ticket body ──────────────────────────────────────────
+    function toggleTicket(header) {
+        const body = header.nextElementSibling;
+        const arrow = header.querySelector('.t-toggle');
+        const isOpen = body.classList.contains('open');
+        body.classList.toggle('open', !isOpen);
+        arrow.style.transform = isOpen ? '' : 'rotate(180deg)';
+    }
+
+    // ── Filter legs ─────────────────────────────────────────────────
+    let currentFilter = 'ALL';
+
+    function filterLegs(filter, btn) {
+        currentFilter = filter;
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active-filter'));
+        btn.classList.add('active-filter');
+        applyFilter();
+    }
+
+    function applyFilter() {
+        let visibleLegs = 0;
+
+        document.querySelectorAll('.ticket-block').forEach(block => {
+            const legs = block.querySelectorAll('.leg-row');
+            let anyVisible = false;
+
+            legs.forEach(leg => {
+                const result = leg.dataset.result;
+                const show = currentFilter === 'ALL' || result === currentFilter;
+                leg.style.display = show ? '' : 'none';
+                if (show) { anyVisible = true; visibleLegs++; }
+            });
+
+            // Hide entire ticket block if no legs match
+            block.style.display = anyVisible ? '' : 'none';
+        });
+
+        const total = document.querySelectorAll('.leg-row').length;
+        document.getElementById('legCount').textContent =
+            currentFilter === 'ALL'
+                ? `Ukupno ${total} parova`
+                : `Prikazano ${visibleLegs} od ${total}`;
+    }
+
+    // Init count
+    applyFilter();
+</script>
+</body>
+</html>

@@ -78,11 +78,10 @@
 
     <h3 {% if title %}style="display:none"{% endif %}>Tablica zlatnih, srebrnih i broncanih</h3>
     <p class="sort-note">
-        Poredak: <strong>1.</strong> broj pogodaka &nbsp;›&nbsp;
-        <strong>2.</strong> prosječni tečaj pogodaka.
-        &nbsp;·&nbsp; Bodovi: <strong>+1+tečaj</strong> pogodak &nbsp;·&nbsp;
-        <strong>+tečaj</strong> poništen &nbsp;·&nbsp;
-        <strong>−2−tečaj</strong> promašaj.
+        Poredak: <strong>1.</strong> % pogodaka &nbsp;›&nbsp;
+        <strong>2.</strong> prosječni tečaj &nbsp;›&nbsp;
+        <strong>3.</strong> manje poništenih parova.
+        Poništeni parovi se <em>ne</em> računaju u win rate.
     </p>
 
     <div class="table-wrap" style="margin-bottom:20px;">
@@ -94,7 +93,7 @@
                     <th><i data-lucide="check-circle-2" style="width:13px;height:13px;color:#4ade80;vertical-align:middle;"></i></th>
                     <th><i data-lucide="x-circle" style="width:13px;height:13px;color:var(--red);vertical-align:middle;"></i></th>
                     <th class="hide-mobile" title="Broj poništenih parova"><i data-lucide="minus-circle" style="width:13px;height:13px;color:var(--text-muted);vertical-align:middle;margin-right:3px;"></i></th>
-                    <th title="Bodovi: +1+tečaj pogodak · +tečaj poništen · −2−tečaj promašaj">Bodovi</th>
+                    <th>%</th>
                     <th class="hide-mobile">Prosj. tečaj</th>
                     <th class="hide-mobile">Najveći tečaj</th>
                     <th><i data-lucide="flame" style="width:13px;height:13px;color:var(--accent);vertical-align:middle;margin-right:3px;"></i>Niz</th>
@@ -110,16 +109,19 @@
                         {% else %}<span style="color:var(--text-muted);">{{ loop.index }}</span>
                         {% endif %}
                     </td>
-                    <td style="font-weight:600;">{{ player.name }}</td>
+                    <td style="font-weight:600;">
+                        <a href="/player/{{ player.player_id }}" style="color:var(--text); text-decoration:none;"
+                           onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text)'">
+                            {{ player.name }}
+                        </a>
+                    </td>
                     <td class="WON">{{ player.guessed }}</td>
                     <td class="LOST">{{ player.missed }}</td>
                     <td class="hide-mobile" style="color:var(--text-muted);">
                         {% if player.voided > 0 %}<span style="color:var(--text-muted);">{{ player.voided }}</span>
                         {% else %}–{% endif %}
                     </td>
-                    <td style="font-weight:700; color:{% if player.score_pts >= 0 %}var(--accent){% else %}var(--red){% endif %};">
-                        {% if player.score_pts >= 0 %}+{% endif %}{{ player.score_pts }}
-                    </td>
+                    <td style="font-weight:600;">{{ player.win_rate }}%</td>
                     <td class="hide-mobile" style="color:var(--text-muted);">{{ player.avg_odds }}</td>
                     <td class="hide-mobile" style="color:var(--accent);">{{ player.max_win }}</td>
                     <td>
