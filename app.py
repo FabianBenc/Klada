@@ -780,7 +780,7 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
         if not ticket_set:
             leaderboard_data.append({
                 "name": name, "player_id": player_id,
-                "points": 0, "avg_odds": 0, "max_win": 0,
+                "score_pts": 0, "avg_odds": 0, "max_win": 0,
                 "max_win_streak": 0, "guessed": 0, "missed": 0, "voided": 0,
             })
             continue
@@ -816,6 +816,21 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
                   [player_id] + tid_list)
         max_win = c.fetchone()[0]
 
+        # Score: WINNING = 1 + odds, VOIDED = 0 + odds, LOSING = -2 - odds
+        c.execute(f"SELECT COALESCE(SUM(1 + odds), 0) FROM bets WHERE player=? AND ticket_id IN ({placeholders}) AND result='WINNING'",
+                  [player_id] + tid_list)
+        score_win = c.fetchone()[0] or 0
+
+        c.execute(f"SELECT COALESCE(SUM(odds), 0) FROM bets WHERE player=? AND ticket_id IN ({placeholders}) AND result IN ('VOIDED','WINNING_VOIDED')",
+                  [player_id] + tid_list)
+        score_void = c.fetchone()[0] or 0
+
+        c.execute(f"SELECT COALESCE(SUM(-2 - odds), 0) FROM bets WHERE player=? AND ticket_id IN ({placeholders}) AND result='LOSING'",
+                  [player_id] + tid_list)
+        score_lose = c.fetchone()[0] or 0
+
+        score_pts = round(score_win + score_void + score_lose, 2)
+
         # Win streak max within this period
         c.execute(f"""
             SELECT t.ticket_id FROM tickets t
@@ -836,10 +851,9 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
             else:
                 cur_ws = 0
 
-        points = (guessed * 3) + (voided * 1)
         leaderboard_data.append({
             "name": name, "player_id": player_id,
-            "points": points,
+            "score_pts": score_pts,
             "avg_odds": round(avg_odds, 2) if avg_odds else 0,
             "max_win": max_win if max_win else 0,
             "max_win_streak": max_ws,
@@ -848,7 +862,7 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
             "voided": voided,
         })
 
-    leaderboard_data.sort(key=lambda x: (x["points"], x["avg_odds"]), reverse=True)
+    leaderboard_data.sort(key=lambda x: (x["guessed"], x["avg_odds"]), reverse=True)
 
     # ── Payment calculation ───────────────────────────────────────────────────
     resolved_ticket_ids = [tid for tid in ticket_ids]  # already ordered
