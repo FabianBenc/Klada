@@ -200,7 +200,7 @@
                 <div class="value" style="color:{% if stats.score_pts >= 0 %}var(--accent){% else %}var(--red){% endif %};">
                     {% if stats.score_pts >= 0 %}+{% endif %}{{ stats.score_pts }}
                 </div>
-                <div class="sub">+1+tečaj / +tečaj / −2−tečaj</div>
+                <div class="sub">+1+tečaj / +tečaj / −1−tečaj</div>
             </div>
             <div class="stat-card">
                 <div class="label">Prosj. tečaj</div>
@@ -216,7 +216,7 @@
                 <div class="value">{{ stats.max_win_streak }}</div>
                 <div class="sub">
                     {% if stats.win_streak > 0 %}
-                        Trenutni: {{ stats.win_streak }} 🔥
+                        Trenutni: {{ stats.win_streak }} <i data-lucide="flame" style="width:11px;height:11px;vertical-align:middle;color:var(--accent);"></i>
                     {% elif stats.loss_streak > 0 %}
                         Gubitaški: {{ stats.loss_streak }}
                     {% else %}–{% endif %}
@@ -227,19 +227,19 @@
         <!-- ── Score legend ── -->
         <div class="score-legend">
             <span><strong>Score formula:</strong></span>
-            <span>✅ Pogodak: <strong>+1 + tečaj</strong></span>
-            <span>🔘 Poništen: <strong>+tečaj</strong></span>
-            <span>❌ Promašaj: <strong>−2 − tečaj</strong></span>
+            <span><i data-lucide="check-circle-2" style="width:11px;height:11px;vertical-align:middle;color:var(--green);margin-right:3px;"></i>Pogodak: <strong>+1 + tečaj</strong></span>
+            <span><i data-lucide="minus-circle" style="width:11px;height:11px;vertical-align:middle;color:var(--text-muted);margin-right:3px;"></i>Poništen: <strong>+tečaj</strong></span>
+            <span><i data-lucide="x-circle" style="width:11px;height:11px;vertical-align:middle;color:var(--red);margin-right:3px;"></i>Promašaj: <strong>−1 − tečaj</strong></span>
         </div>
 
         <!-- ── Filter bar ── -->
         <div class="filter-bar">
             <span style="font-size:12px; color:var(--text-muted); margin-right:4px;">Prikaži:</span>
             <button class="filter-btn active-filter" onclick="filterLegs('ALL', this)">Sve</button>
-            <button class="filter-btn" onclick="filterLegs('WINNING', this)">✅ Pogoci</button>
-            <button class="filter-btn" onclick="filterLegs('LOSING', this)">❌ Promašaji</button>
-            <button class="filter-btn" onclick="filterLegs('VOIDED', this)">🔘 Poništeni</button>
-            <button class="filter-btn" onclick="filterLegs('PENDING', this)">⏳ U tijeku</button>
+            <button class="filter-btn" onclick="filterLegs('WINNING', this)"><i data-lucide="check-circle-2" style="width:12px;height:12px;margin-right:4px;vertical-align:middle;color:var(--green);"></i>Pogoci</button>
+            <button class="filter-btn" onclick="filterLegs('LOSING', this)"><i data-lucide="x-circle" style="width:12px;height:12px;margin-right:4px;vertical-align:middle;color:var(--red);"></i>Promašaji</button>
+            <button class="filter-btn" onclick="filterLegs('VOIDED', this)"><i data-lucide="minus-circle" style="width:12px;height:12px;margin-right:4px;vertical-align:middle;color:var(--text-muted);"></i>Poništeni</button>
+            <button class="filter-btn" onclick="filterLegs('PENDING', this)"><i data-lucide="clock" style="width:12px;height:12px;margin-right:4px;vertical-align:middle;"></i>U tijeku</button>
             <span style="margin-left:auto; font-size:12px; color:var(--text-muted);" id="legCount"></span>
         </div>
 
@@ -269,9 +269,9 @@
                     {% if t_status == 'WINNING' %}res-WINNING
                     {% elif t_status == 'LOSING' %}res-LOSING
                     {% else %}res-PENDING{% endif %}">
-                    {% if t_status == 'WINNING' %}✅ Dobitan
-                    {% elif t_status == 'LOSING' %}❌ Izgubljen
-                    {% else %}⏳ U tijeku{% endif %}
+                    {% if t_status == 'WINNING' %}<i data-lucide="check-circle-2" style="width:11px;height:11px;vertical-align:middle;margin-right:3px;"></i>Dobitan
+                    {% elif t_status == 'LOSING' %}<i data-lucide="x-circle" style="width:11px;height:11px;vertical-align:middle;margin-right:3px;"></i>Izgubljen
+                    {% else %}<i data-lucide="clock" style="width:11px;height:11px;vertical-align:middle;margin-right:3px;"></i>U tijeku{% endif %}
                 </span>
                 <span class="t-toggle">▼</span>
             </div>
@@ -288,10 +288,10 @@
                     <div class="leg-score">{{ leg.score or '–' }}</div>
                     <div class="leg-odds">{{ leg.odds }}</div>
                     <div class="leg-result res-{{ r }}">
-                        {% if r == 'WINNING' %}✅ Pogodak
-                        {% elif r == 'LOSING' %}❌ Promašaj
-                        {% elif r == 'VOIDED' %}🔘 Poništen
-                        {% else %}⏳ U tijeku
+                        {% if r == 'WINNING' %}<i data-lucide="check-circle-2" style="width:12px;height:12px;vertical-align:middle;margin-right:3px;"></i>Pogodak
+                        {% elif r == 'LOSING' %}<i data-lucide="x-circle" style="width:12px;height:12px;vertical-align:middle;margin-right:3px;"></i>Promašaj
+                        {% elif r == 'VOIDED' %}<i data-lucide="minus-circle" style="width:12px;height:12px;vertical-align:middle;margin-right:3px;"></i>Poništen
+                        {% else %}<i data-lucide="clock" style="width:12px;height:12px;vertical-align:middle;margin-right:3px;"></i>U tijeku
                         {% endif %}
                     </div>
                 </div>
@@ -322,6 +322,7 @@
         const isOpen = body.classList.contains('open');
         body.classList.toggle('open', !isOpen);
         arrow.style.transform = isOpen ? '' : 'rotate(180deg)';
+        lucide.createIcons();
     }
 
     // ── Filter legs ─────────────────────────────────────────────────

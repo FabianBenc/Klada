@@ -298,14 +298,9 @@ def save_ticket(ticket_number, data):
             except (TypeError, ValueError):
                 payout = None
 
-    # Assign to the most recent period whose start_date <= ticket date
     period_id = None
-    ticket_date = psk_created[:10]  # "YYYY-MM-DD"
-    c.execute("""
-        SELECT id FROM periods
-        WHERE start_date <= ?
-        ORDER BY start_date DESC LIMIT 1
-    """, (ticket_date,))
+    ticket_date = psk_created[:10]
+    c.execute("SELECT id FROM periods WHERE start_date <= ? ORDER BY start_date DESC LIMIT 1", (ticket_date,))
     row = c.fetchone()
     if row:
         period_id = row[0]
@@ -404,22 +399,67 @@ def update_loss_streaks(ticket_id, conn=None):
         conn.commit()
 
 
-def get_loss_streaks():
+def get_current_streaks():
+    """
+    Compute win and loss streaks scoped to the most recent period.
+    If no periods exist, uses all tickets.
+    Returns (loss_streaks, win_streaks) as {player_id: streak} dicts.
+    """
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT player, streak FROM loss_streaks")
-    streaks = {row[0]: row[1] for row in c.fetchall()}
+
+    # Find the most recent period
+    c.execute("SELECT id FROM periods ORDER BY start_date DESC LIMIT 1")
+    row = c.fetchone()
+
+    if row:
+        period_id = row[0]
+        c.execute("""
+            SELECT ticket_id FROM tickets
+            WHERE period_id=?
+            ORDER BY id ASC
+        """, (period_id,))
+    else:
+        c.execute("SELECT ticket_id FROM tickets ORDER BY id ASC")
+
+    ticket_ids = [r[0] for r in c.fetchall()]
+
+    c.execute("SELECT id FROM players")
+    all_player_ids = [r[0] for r in c.fetchall()]
+
+    loss_streaks = {pid: 0 for pid in all_player_ids}
+    win_streaks  = {pid: 0 for pid in all_player_ids}
+
+    for tid in ticket_ids:
+        for pid in all_player_ids:
+            c.execute("SELECT result FROM bets WHERE ticket_id=? AND player=?", (tid, pid))
+            results = [r[0] for r in c.fetchall()]
+            if not results or any(r in (None, "PENDING", "UNKNOWN") for r in results):
+                continue
+            all_winning = all(r in ("WINNING", "VOIDED", "WINNING_VOIDED") for r in results)
+            all_losing  = all(r == "LOSING" for r in results)
+            if all_winning:
+                win_streaks[pid] += 1
+                loss_streaks[pid] = 0
+            elif all_losing:
+                loss_streaks[pid] = 1 if loss_streaks[pid] >= 3 else loss_streaks[pid] + 1
+                win_streaks[pid] = 0
+            else:
+                win_streaks[pid] = 0
+                loss_streaks[pid] = 0
+
     conn.close()
-    return streaks
+    return loss_streaks, win_streaks
+
+
+def get_loss_streaks():
+    loss, _ = get_current_streaks()
+    return loss
 
 
 def get_win_streaks():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("SELECT player, streak FROM win_streaks")
-    streaks = {row[0]: row[1] for row in c.fetchall()}
-    conn.close()
-    return streaks
+    _, win = get_current_streaks()
+    return win
 
 
 def recalculate_all_streaks():
@@ -485,6 +525,7 @@ def update_ticket_results():
         JOIN bets b ON t.ticket_id = b.ticket_id
         WHERE b.result IS NULL OR b.result = 'PENDING' OR b.result = 'UNKNOWN'
         ORDER BY t.id DESC
+        LIMIT 2
     """)
     tickets = c.fetchall()
     for (ticket_id, ticket_jwt) in tickets:
@@ -802,7 +843,8 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
             leaderboard_data.append({
                 "name": name, "player_id": player_id,
                 "score_pts": 0, "avg_odds": 0, "max_win": 0,
-                "max_win_streak": 0, "guessed": 0, "missed": 0, "voided": 0,
+                "max_win_streak": 0, "win_streak": 0, "loss_streak": 0,
+                "guessed": 0, "missed": 0, "voided": 0,
             })
             continue
 
@@ -837,7 +879,7 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
                   [player_id] + tid_list)
         max_win = c.fetchone()[0]
 
-        # Win streak max within this period
+        # Win streak and loss streak — scoped to this period's tickets only
         c.execute(f"""
             SELECT t.ticket_id FROM tickets t
             WHERE t.ticket_id IN ({placeholders})
@@ -846,25 +888,33 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
         ordered_tids = [r[0] for r in c.fetchall()]
         max_ws = 0
         cur_ws = 0
+        cur_ls = 0
         for tid in ordered_tids:
             c.execute("SELECT result FROM bets WHERE ticket_id=? AND player=?", (tid, player_id))
             results = [r[0] for r in c.fetchall()]
             if not results or any(r in (None, "PENDING", "UNKNOWN") for r in results):
                 continue
-            if all(r in ("WINNING", "VOIDED", "WINNING_VOIDED") for r in results):
+            all_winning = all(r in ("WINNING", "VOIDED", "WINNING_VOIDED") for r in results)
+            all_losing  = all(r == "LOSING" for r in results)
+            if all_winning:
                 cur_ws += 1
                 max_ws = max(max_ws, cur_ws)
+                cur_ls = 0
+            elif all_losing:
+                cur_ls = 1 if cur_ls >= 3 else cur_ls + 1
+                cur_ws = 0
             else:
                 cur_ws = 0
+                cur_ls = 0
 
-        # Score: WINNING = 1+odds, VOIDED = 0+odds, LOSING = -2-odds
+        # Score: WINNING = 1+odds, VOIDED = 0+odds, LOSING = -1-odds
         c.execute(f"SELECT COALESCE(SUM(1+odds),0) FROM bets WHERE player=? AND ticket_id IN ({placeholders}) AND result='WINNING'",
                   [player_id] + tid_list)
         s_win = c.fetchone()[0] or 0
         c.execute(f"SELECT COALESCE(SUM(odds),0) FROM bets WHERE player=? AND ticket_id IN ({placeholders}) AND result IN ('VOIDED','WINNING_VOIDED')",
                   [player_id] + tid_list)
         s_void = c.fetchone()[0] or 0
-        c.execute(f"SELECT COALESCE(SUM(-2-odds),0) FROM bets WHERE player=? AND ticket_id IN ({placeholders}) AND result='LOSING'",
+        c.execute(f"SELECT COALESCE(SUM(-1-odds),0) FROM bets WHERE player=? AND ticket_id IN ({placeholders}) AND result='LOSING'",
                   [player_id] + tid_list)
         s_lose = c.fetchone()[0] or 0
         score_pts = round(s_win + s_void + s_lose, 2)
@@ -875,6 +925,8 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
             "avg_odds": round(avg_odds, 2) if avg_odds else 0,
             "max_win": max_win if max_win else 0,
             "max_win_streak": max_ws,
+            "win_streak": cur_ws,
+            "loss_streak": cur_ls,
             "guessed": guessed,
             "missed": missed,
             "voided": voided,
@@ -883,59 +935,91 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
     leaderboard_data.sort(key=lambda x: (x["guessed"], x["avg_odds"]), reverse=True)
 
     # ── Payment calculation ───────────────────────────────────────────────────
-    resolved_ticket_ids = [tid for tid in ticket_ids]  # already ordered
+    # Rules:
+    # - First ticket of each period/chain: everyone pays €1.
+    # - Ticket N+1 cost = num_players_on_N × €1, split equally among losers from N.
+    # - If no losers on N: everyone on N+1 pays €1.
+    # - New player joining N+1 (wasn't on N): pays €1 for themselves only.
+    # - Period boundaries reset the chain.
+
+    if ticket_ids:
+        c.execute(
+            "SELECT ticket_id, period_id FROM tickets WHERE ticket_id IN ({}) ORDER BY id ASC".format(
+                ",".join("?" * len(ticket_ids))
+            ),
+            list(ticket_ids),
+        )
+        ticket_period_map = {r[0]: r[1] for r in c.fetchall()}
+    else:
+        ticket_period_map = {}
 
     payments = {pid: 0.0 for pid in player_names}
-    for i, ticket_id in enumerate(resolved_ticket_ids):
+
+    for i, ticket_id in enumerate(ticket_ids):
         c.execute("SELECT player_id FROM ticket_players WHERE ticket_id=?", (ticket_id,))
         snap = c.fetchall()
         ticket_pids = [r[0] for r in snap] if snap else []
         if not ticket_pids:
             c.execute("SELECT DISTINCT player FROM bets WHERE ticket_id=?", (ticket_id,))
             ticket_pids = [r[0] for r in c.fetchall()]
-
-        num_on_ticket = len(ticket_pids)
-        if num_on_ticket == 0:
+        if not ticket_pids:
             continue
 
-        if i == 0:
+        # First ticket of chain?
+        is_first = (i == 0)
+        if not is_first:
+            prev_id = ticket_ids[i - 1]
+            if ticket_period_map.get(ticket_id) != ticket_period_map.get(prev_id):
+                is_first = True
+
+        if is_first:
             for pid in ticket_pids:
                 if pid in payments:
                     payments[pid] += 1.0
-        else:
-            prev_ticket_id = resolved_ticket_ids[i - 1]
-            c.execute("SELECT player_id FROM ticket_players WHERE ticket_id=?", (prev_ticket_id,))
-            prev_snap = c.fetchall()
-            prev_pids = [r[0] for r in prev_snap] if prev_snap else []
-            if not prev_pids:
-                c.execute("SELECT DISTINCT player FROM bets WHERE ticket_id=?", (prev_ticket_id,))
-                prev_pids = [r[0] for r in c.fetchall()]
+            continue
 
-            new_players = set(ticket_pids) - set(prev_pids)
-            for pid in new_players:
+        prev_ticket_id = ticket_ids[i - 1]
+
+        # Players on previous ticket
+        c.execute("SELECT player_id FROM ticket_players WHERE ticket_id=?", (prev_ticket_id,))
+        prev_snap = c.fetchall()
+        prev_pids = [r[0] for r in prev_snap] if prev_snap else []
+        if not prev_pids:
+            c.execute("SELECT DISTINCT player FROM bets WHERE ticket_id=?", (prev_ticket_id,))
+            prev_pids = [r[0] for r in c.fetchall()]
+
+        prev_count = len(prev_pids)
+
+        # Losers from previous ticket
+        losers = set()
+        for pid in prev_pids:
+            c.execute(
+                "SELECT COUNT(*) FROM bets WHERE ticket_id=? AND player=? AND result='LOSING'",
+                (prev_ticket_id, pid),
+            )
+            if c.fetchone()[0] > 0:
+                losers.add(pid)
+
+        if losers:
+            cost_per_loser = round(prev_count / len(losers), 2)
+            for pid in losers:
+                if pid in payments:
+                    payments[pid] += cost_per_loser
+        else:
+            # No losers — everyone on this ticket pays €1
+            for pid in ticket_pids:
                 if pid in payments:
                     payments[pid] += 1.0
 
-            losers = set()
-            for pid in prev_pids:
-                c.execute("SELECT COUNT(*) FROM bets WHERE ticket_id=? AND player=? AND result='LOSING'",
-                          (prev_ticket_id, pid))
-                if c.fetchone()[0] > 0:
-                    losers.add(pid)
-
-            if losers:
-                covered_by_new = len(new_players)
-                remaining_cost = num_on_ticket - covered_by_new
-                if remaining_cost > 0:
-                    cost_per_loser = round(remaining_cost / len(losers), 2)
-                    for pid in losers:
-                        if pid in payments:
-                            payments[pid] += cost_per_loser
+        # New players joining this ticket pay €1 each
+        new_players = set(ticket_pids) - set(prev_pids)
+        for pid in new_players:
+            if pid in payments:
+                payments[pid] += 1.0
 
     # ── Winnings calculation ──────────────────────────────────────────────────
-    # For each WINNING ticket, split payout equally among all players on that ticket.
     winnings = {pid: 0.0 for pid in player_names}
-    for ticket_id in resolved_ticket_ids:
+    for ticket_id in ticket_ids:
         c.execute("SELECT ticket_result, payout FROM tickets WHERE ticket_id=?", (ticket_id,))
         t_row = c.fetchone()
         if not t_row or t_row[0] != "WINNING" or t_row[1] is None:
@@ -1127,13 +1211,14 @@ def player_profile(player_id):
     s_win = c.fetchone()[0] or 0
     c.execute("SELECT COALESCE(SUM(odds),0) FROM bets WHERE player=? AND result IN ('VOIDED','WINNING_VOIDED')", (player_id,))
     s_void = c.fetchone()[0] or 0
-    c.execute("SELECT COALESCE(SUM(-2-odds),0) FROM bets WHERE player=? AND result='LOSING'", (player_id,))
+    c.execute("SELECT COALESCE(SUM(-1-odds),0) FROM bets WHERE player=? AND result='LOSING'", (player_id,))
     s_lose = c.fetchone()[0] or 0
     score_pts = round(s_win + s_void + s_lose, 2)
-    c.execute("SELECT streak FROM loss_streaks WHERE player=?", (player_id,))
-    r = c.fetchone(); loss_streak = r[0] if r else 0
-    c.execute("SELECT streak, max_streak FROM win_streaks WHERE player=?", (player_id,))
-    r = c.fetchone(); win_streak = r[0] if r else 0; max_win_streak = r[1] if r else 0
+    loss_streaks, win_streaks = get_current_streaks()
+    win_streak = win_streaks.get(player_id, 0)
+    loss_streak = loss_streaks.get(player_id, 0)
+    c.execute("SELECT max_streak FROM win_streaks WHERE player=?", (player_id,))
+    r = c.fetchone(); max_win_streak = r[0] if r else 0
 
     all_players = get_all_players_with_status(conn)
     conn.close()
