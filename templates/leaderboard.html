@@ -81,7 +81,7 @@
         Poredak: <strong>1.</strong> broj pogodaka &nbsp;›&nbsp;
         <strong>2.</strong> prosječni tečaj (tiebreak).
         &nbsp;·&nbsp; Score: <strong>+1+tečaj</strong> pogodak &nbsp;·&nbsp;
-        <strong>+tečaj</strong> poništen &nbsp;·&nbsp;
+        <strong>+1</strong> poništen &nbsp;·&nbsp;
         <strong>−1−tečaj</strong> promašaj.
     </p>
 
@@ -94,7 +94,7 @@
                     <th><i data-lucide="check-circle-2" style="width:13px;height:13px;color:#4ade80;vertical-align:middle;"></i></th>
                     <th><i data-lucide="x-circle" style="width:13px;height:13px;color:var(--red);vertical-align:middle;"></i></th>
                     <th class="hide-mobile" title="Broj poništenih parova"><i data-lucide="minus-circle" style="width:13px;height:13px;color:var(--text-muted);vertical-align:middle;margin-right:3px;"></i></th>
-                    <th title="Score: +1+tečaj pogodak · +tečaj poništen · −1−tečaj promašaj">Score</th>
+                    <th title="Score: +1+tečaj pogodak · +1 poništen · −1−tečaj promašaj">Score</th>
                     <th class="hide-mobile">Prosj. tečaj</th>
                     <th class="hide-mobile">Najveći tečaj</th>
                     <th><i data-lucide="flame" style="width:13px;height:13px;color:var(--accent);vertical-align:middle;margin-right:3px;"></i>Niz</th>
@@ -110,12 +110,7 @@
                         {% else %}<span style="color:var(--text-muted);">{{ loop.index }}</span>
                         {% endif %}
                     </td>
-                    <td style="font-weight:600;">
-                        <a href="/player/{{ player.player_id }}" style="color:var(--text); text-decoration:none;"
-                           onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text)'">
-                            {{ player.name }}
-                        </a>
-                    </td>
+                    <td style="font-weight:600;">{{ player.name }}</td>
                     <td class="WON">{{ player.guessed }}</td>
                     <td class="LOST">{{ player.missed }}</td>
                     <td class="hide-mobile" style="color:var(--text-muted);">
