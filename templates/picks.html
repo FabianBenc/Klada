@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='icon.png') }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parovi – Propali Kladioničari</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+    <style>
+        /* ── slot card ── */
+        .slot-card {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        .slot-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+        }
+        .slot-title  { font-weight: 700; font-size: 15px; color: var(--text); }
+        .slot-meta   { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+        .lock-badge  {
+            font-size: 11px; font-weight: 700; padding: 2px 9px;
+            border-radius: 20px; letter-spacing: 0.4px;
+        }
+        .lock-open   { background: rgba(0,173,181,0.15); color: var(--accent); border: 1px solid rgba(0,173,181,0.35); }
+        .lock-closed { background: rgba(229,115,115,0.12); color: var(--red); border: 1px solid rgba(229,115,115,0.3); }
+
+        /* ── picks grid ── */
+        .picks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 10px;
+            padding: 14px 16px;
+        }
+        .player-picks-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .player-picks-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface2);
+        }
+        .player-picks-header .pname { font-weight: 700; font-size: 13px; color: var(--text); }
+        .player-picks-header .pcount {
+            font-size: 10px; color: var(--text-muted); margin-left: auto;
+            background: var(--surface3); border-radius: 20px; padding: 1px 7px;
+            color: #0d0d0d; font-weight: 700;
+        }
+        .pick-row {
+            padding: 8px 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            font-size: 13px;
+        }
+        .pick-row:last-child { border-bottom: none; }
+        .pick-fixture { font-weight: 500; color: var(--text); margin-bottom: 2px; }
+        .pick-detail  { display: flex; gap: 8px; align-items: center; font-size: 12px; }
+        .pick-tip     { background: rgba(0,173,181,0.12); color: var(--accent); border-radius: 4px; padding: 1px 6px; font-weight: 700; }
+        .pick-odds    { color: var(--text-muted); }
+        .pick-time    { color: var(--text-muted); font-size: 10px; margin-top: 2px; }
+
+        /* ── empty slot ── */
+        .empty-slot {
+            padding: 24px 16px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        /* ── submit form ── */
+        .submit-section {
+            padding: 14px 16px;
+            border-top: 1px solid var(--border);
+            background: var(--surface);
+        }
+        .submit-section h4 {
+            font-size: 12px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: 12px;
+        }
+        .pick-input-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 80px;
+            gap: 6px;
+            margin-bottom: 8px;
+            align-items: center;
+        }
+        .pick-num {
+            font-size: 11px; font-weight: 700; color: var(--text-muted);
+            min-width: 18px;
+        }
+        .pick-input-row input {
+            font-size: 12px !important;
+            padding: 5px 8px !important;
+        }
+        .player-select-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+        .player-select-row label { margin-bottom: 0; white-space: nowrap; }
+
+        /* ── countdown ── */
+        .countdown {
+            font-size: 12px; font-weight: 700; color: var(--accent);
+            font-variant-numeric: tabular-nums;
+        }
+        .countdown.urgent { color: var(--red); animation: pulse-text 1s ease-in-out infinite; }
+        @keyframes pulse-text {
+            0%,100% { opacity: 1; }
+            50%      { opacity: 0.5; }
+        }
+
+        /* ── history ── */
+        .history-block {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            overflow: hidden;
+        }
+        .history-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 14px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .history-header:hover { background: rgba(255,255,255,0.02); }
+        .history-body { display: none; padding: 0 14px 12px; }
+        .history-body.open { display: block; }
+        .history-player-row {
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            font-size: 13px;
+        }
+        .history-player-row:last-child { border-bottom: none; }
+
+        /* ── tabs ── */
+        .slot-tab-bar {
+            display: flex;
+            gap: 0;
+            border-bottom: 2px solid var(--border);
+            margin-bottom: 16px;
+        }
+        .slot-tab {
+            padding: 8px 18px;
+            font-size: 12px;
+            font-weight: 600;
+            background: transparent;
+            color: var(--text-muted);
+            border: none !important;
+            border-bottom: 2px solid transparent !important;
+            margin-bottom: -2px;
+            cursor: pointer;
+            border-radius: 0;
+            box-shadow: none !important;
+            transition: color 0.15s;
+        }
+        .slot-tab.active { color: var(--accent) !important; border-bottom: 2px solid var(--accent) !important; background: transparent !important; }
+        .slot-tab:hover:not(.active) { color: var(--text); background: transparent; box-shadow: none !important; }
+    </style>
+</head>
+
+<body>
+<div class="window">
+    <div class="title-bar" style="padding:12px 18px;">
+        <div class="title-bar-text"><span class="app-title">Parovi</span></div>
+    </div>
+
+    <div class="menu-bar">
+        <div class="menu-item" onclick="this.querySelector('.dropdown').style.display = this.querySelector('.dropdown').style.display === 'flex' ? 'none' : 'flex'">
+            <i data-lucide="menu" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Navigacija
+            <div class="dropdown" style="display:none;">
+                <a href="/"><i data-lucide="home" style="width:13px;height:13px;"></i>Početna</a>
+                <a href="/leaderboard"><i data-lucide="trophy" style="width:13px;height:13px;"></i>Poredak</a>
+                <a href="/players"><i data-lucide="users" style="width:13px;height:13px;"></i>Igrači</a>
+                <a href="/pravila"><i data-lucide="book-open" style="width:13px;height:13px;"></i>Pravila</a>
+                {% if not admin_logged_in %}<a href="/login"><i data-lucide="log-in" style="width:13px;height:13px;"></i>Admin prijava</a>{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="window-body">
+
+        {% if request.args.get('error') == 'locked' %}
+        <div style="background:rgba(229,115,115,0.12); border:1px solid rgba(229,115,115,0.3); border-radius:6px;
+                    padding:10px 14px; margin-bottom:14px; color:var(--red); font-size:13px; display:flex; align-items:center; gap:8px;">
+            <i data-lucide="lock" style="width:14px;height:14px;flex-shrink:0;"></i>
+            Slot je zatvoren — više nije moguće slati parove.
+        </div>
+        {% endif %}
+
+        <!-- ── Info bar ─────────────────────────────────────────────────── -->
+        <div style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:18px; font-size:12px; color:var(--text-muted);">
+            <span><i data-lucide="info" style="width:12px;height:12px;vertical-align:middle;margin-right:3px;"></i>
+                Tjedni tiket: zatvara se <strong style="color:var(--text);">utorak u ponoć</strong>
+            </span>
+            <span>
+                Vikend tiket: zatvara se <strong style="color:var(--text);">petak u 12:00</strong>
+            </span>
+            <span>
+                Svaki igrač može prijaviti <strong style="color:var(--text);">1 ili 2 para</strong>
+            </span>
+        </div>
+
+        <!-- ── Current slots ────────────────────────────────────────────── -->
+        {% for slot in slots %}
+        <div class="slot-card">
+            <div class="slot-header">
+                <i data-lucide="{% if slot.slot_type == 'weekday' %}briefcase{% else %}sun{% endif %}"
+                   style="width:16px;height:16px;color:var(--accent);flex-shrink:0;"></i>
+                <span class="slot-title">{{ slot.label }}</span>
+                {% if slot.is_open %}
+                <span class="lock-badge lock-open">
+                    <i data-lucide="unlock" style="width:10px;height:10px;vertical-align:middle;margin-right:2px;"></i>
+                    Otvoreno
+                </span>
+                <span class="slot-meta">
+                    Zatvara se: <strong>{{ slot.locks_at }}</strong>
+                    &nbsp;|&nbsp;
+                    <span class="countdown" id="countdown-{{ loop.index }}" data-locks="{{ slot.locks_at }}"></span>
+                </span>
+                {% else %}
+                <span class="lock-badge lock-closed">
+                    <i data-lucide="lock" style="width:10px;height:10px;vertical-align:middle;margin-right:2px;"></i>
+                    Zatvoren
+                </span>
+                <span class="slot-meta">Zatvoreno: {{ slot.locks_at }}</span>
+                {% endif %}
+            </div>
+
+            <!-- Submitted picks grid -->
+            {% if slot.by_player %}
+            <div class="picks-grid">
+                {% for pid, player_picks in slot.by_player.items() %}
+                <div class="player-picks-card">
+                    <div class="player-picks-header">
+                        <i data-lucide="user" style="width:13px;height:13px;color:var(--text-muted);"></i>
+                        <span class="pname">{{ player_picks[0].player_name }}</span>
+                        <span class="pcount">{{ player_picks|length }} par{% if player_picks|length > 1 %}a{% endif %}</span>
+                    </div>
+                    {% for pick in player_picks %}
+                    <div class="pick-row">
+                        <div class="pick-fixture">{{ pick.fixture }}</div>
+                        <div class="pick-detail">
+                            <span class="pick-tip">{{ pick.tip }}</span>
+                            {% if pick.odds %}<span class="pick-odds">{{ pick.odds }}</span>{% endif %}
+                        </div>
+                        <div class="pick-time">{{ pick.submitted_at }}</div>
+                        {% if slot.is_open %}
+                        <form method="POST" action="/picks/delete/{{ pick.id }}" style="margin-top:4px;">
+                            <input type="hidden" name="player_id" value="{{ pid }}">
+                            <button type="submit"
+                                    style="background:transparent; color:var(--text-muted); font-size:10px; padding:1px 6px; border:1px solid var(--border) !important;"
+                                    onclick="return confirm('Obriši ovaj par?')">
+                                <i data-lucide="trash-2" style="width:10px;height:10px;vertical-align:middle;"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                        {% if admin_logged_in %}
+                        <form method="POST" action="/picks/delete/{{ pick.id }}" style="margin-top:2px;">
+                            <input type="hidden" name="player_id" value="{{ pid }}">
+                            <button type="submit"
+                                    style="background:rgba(229,115,115,0.15); color:var(--red); font-size:10px; padding:1px 6px; border:1px solid rgba(229,115,115,0.3) !important;"
+                                    onclick="return confirm('Admin: obriši ovaj par?')">
+                                Admin ✕
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-slot">
+                <i data-lucide="inbox" style="width:28px;height:28px;opacity:0.3;display:block;margin:0 auto 8px;"></i>
+                Još nema prijavljenih parova.
+            </div>
+            {% endif %}
+
+            <!-- Submit form (only when open) -->
+            {% if slot.is_open %}
+            <div class="submit-section">
+                <h4><i data-lucide="send" style="width:12px;height:12px;vertical-align:middle;margin-right:4px;"></i>Prijavi svoje parove</h4>
+                <form method="POST" action="/picks/submit">
+                    <input type="hidden" name="slot_id" value="{{ slot.slot_id }}">
+
+                    <div class="player-select-row">
+                        <label>Igrač:</label>
+                        <select name="player_id" required
+                                style="min-width:140px; background:var(--surface2) !important; border:1px solid var(--border) !important; border-radius:6px !important; padding:6px 10px !important; font-size:13px !important; color:var(--text) !important;">
+                            <option value="" disabled selected>— odaberi —</option>
+                            {% for pid, pname in player_names.items() %}
+                            <option value="{{ pid }}">{{ pname }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    {% for i in range(2) %}
+                    <div style="margin-bottom:10px;">
+                        <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">
+                            Par {{ i+1 }}{% if i == 0 %} <span style="color:var(--red);">*</span>{% else %} <span style="color:var(--text-muted); font-weight:400;">(nije obavezno)</span>{% endif %}
+                        </div>
+                        <div class="pick-input-row">
+                            <input type="text" name="fixture"
+                                   placeholder="Utakmica (npr. Arsenal - Chelsea)"
+                                   {% if i == 0 %}required{% endif %}>
+                            <input type="text" name="tip"
+                                   placeholder="Tip (1, X, 2, BTTS, Over 2.5...)"
+                                   {% if i == 0 %}required{% endif %}>
+                            <input type="number" name="odds"
+                                   placeholder="Tečaj" step="0.01" min="1.01">
+                        </div>
+                    </div>
+                    {% endfor %}
+
+                    <div style="display:flex; justify-content:flex-end; margin-top:4px;">
+                        <button type="submit">
+                            <i data-lucide="check" style="width:13px;height:13px;vertical-align:middle;margin-right:4px;"></i>
+                            Prijavi parove
+                        </button>
+                    </div>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        <!-- ── History ──────────────────────────────────────────────────── -->
+        {% if history %}
+        <h3 style="margin-top:8px;">
+            <i data-lucide="history" style="width:16px;height:16px;vertical-align:middle;margin-right:6px;color:var(--text-muted);"></i>
+            Povijest prijava
+        </h3>
+
+        {% for hs in history %}
+        <div class="history-block">
+            <div class="history-header" onclick="toggleHistory(this)">
+                <i data-lucide="{% if hs.slot_type == 'weekday' %}briefcase{% else %}sun{% endif %}"
+                   style="width:13px;height:13px;color:var(--text-muted);flex-shrink:0;"></i>
+                <span style="font-weight:600; font-size:13px; color:var(--text);">{{ hs.week_label }}</span>
+                <span style="font-size:11px; color:var(--text-muted); margin-left:6px;">zatvoren {{ hs.locks_at }}</span>
+                <span style="margin-left:auto; font-size:11px; color:var(--text-muted);">
+                    {{ hs.player_count }} igrač{% if hs.player_count != 1 %}a{% endif %} · {{ hs.pick_count }} par{% if hs.pick_count != 1 %}ova{% endif %}
+                </span>
+                <span class="t-toggle" style="color:var(--text-muted); font-size:11px; margin-left:8px;">▼</span>
+            </div>
+            <div class="history-body">
+                {% for pid, player_picks in hs.by_player.items() %}
+                <div class="history-player-row">
+                    <strong style="color:var(--text);">{{ player_picks[0].player_name }}</strong>
+                    {% for pick in player_picks %}
+                    <div style="padding:3px 0 3px 14px; font-size:12px; color:var(--text-muted);">
+                        <span style="color:var(--text);">{{ pick.fixture }}</span>
+                        &nbsp;
+                        <span style="background:rgba(0,173,181,0.1); color:var(--accent); border-radius:3px; padding:0 5px; font-weight:700;">{{ pick.tip }}</span>
+                        {% if pick.odds %}<span style="color:var(--text-muted);">@ {{ pick.odds }}</span>{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+    </div>
+</div>
+
+<script>
+    document.addEventListener('click', function(e) {
+        document.querySelectorAll('.dropdown').forEach(d => {
+            if (!d.parentElement.contains(e.target)) d.style.display = 'none';
+        });
+    });
+
+    lucide.createIcons();
+
+    // ── History toggle ──────────────────────────────────────────────────────
+    function toggleHistory(header) {
+        const body = header.nextElementSibling;
+        const arrow = header.querySelector('.t-toggle');
+        const isOpen = body.classList.contains('open');
+        body.classList.toggle('open', !isOpen);
+        if (arrow) arrow.style.transform = isOpen ? '' : 'rotate(180deg)';
+    }
+
+    // ── Countdown timers ────────────────────────────────────────────────────
+    function updateCountdowns() {
+        document.querySelectorAll('.countdown[data-locks]').forEach(el => {
+            const locks = new Date(el.dataset.locks.replace(' ', 'T'));
+            const diff = locks - new Date();
+            if (diff <= 0) {
+                el.textContent = 'Zatvoren';
+                return;
+            }
+            const h = Math.floor(diff / 3600000);
+            const m = Math.floor((diff % 3600000) / 60000);
+            const s = Math.floor((diff % 60000) / 1000);
+            el.textContent = `${h}h ${m}m ${s}s`;
+            el.classList.toggle('urgent', diff < 3600000); // red under 1h
+        });
+    }
+    updateCountdowns();
+    setInterval(updateCountdowns, 1000);
+</script>
+</body>
+</html>

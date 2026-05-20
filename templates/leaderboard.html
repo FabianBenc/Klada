@@ -110,7 +110,12 @@
                         {% else %}<span style="color:var(--text-muted);">{{ loop.index }}</span>
                         {% endif %}
                     </td>
-                    <td style="font-weight:600;">{{ player.name }}</td>
+                    <td style="font-weight:600;">
+                        <a href="/player/{{ player.player_id }}" style="color:var(--text); text-decoration:none;"
+                           onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text)'">
+                            {{ player.name }}
+                        </a>
+                    </td>
                     <td class="WON">{{ player.guessed }}</td>
                     <td class="LOST">{{ player.missed }}</td>
                     <td class="hide-mobile" style="color:var(--text-muted);">
