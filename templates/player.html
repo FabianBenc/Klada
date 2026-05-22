@@ -152,17 +152,37 @@
         </div>
     </div>
 
-    <div class="menu-bar">
-        <div class="menu-item" onclick="this.querySelector('.dropdown').style.display = this.querySelector('.dropdown').style.display === 'flex' ? 'none' : 'flex'">
-            <i data-lucide="menu" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Navigacija
-            <div class="dropdown" style="display:none;">
-                <a href="/"><i data-lucide="home" style="width:13px;height:13px;"></i>Početna</a>
-                <a href="/leaderboard"><i data-lucide="trophy" style="width:13px;height:13px;"></i>Poredak</a>
-                <a href="/pravila"><i data-lucide="book-open" style="width:13px;height:13px;"></i>Pravila igre</a>
-                {% if not admin_logged_in %}<a href="/login"><i data-lucide="log-in" style="width:13px;height:13px;"></i>Admin prijava</a>{% endif %}
+    <div class="menu-bar" id="mainMenuBar">
+
+        <a href="/"            class="menu-item" style="text-decoration:none;"><i data-lucide="home"        style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Početna</a>
+        <a href="/leaderboard" class="menu-item" style="text-decoration:none;"><i data-lucide="trophy"      style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Poredak</a>
+        <a href="/pravila"     class="menu-item" style="text-decoration:none;"><i data-lucide="scroll-text" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Pravila</a>
+        <a href="/players"     class="menu-item" style="text-decoration:none;"><i data-lucide="users"       style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Igrači</a>
+        <a href="/picks"       class="menu-item" style="text-decoration:none;"><i data-lucide="pencil-line" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Parovi</a>
+
+        {% if admin_logged_in %}
+        <a href="/update" class="menu-item" style="text-decoration:none; color:var(--accent);"><i data-lucide="refresh-cw" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Ažuriraj</a>
+        {% endif %}
+
+        <div class="menu-item" id="adminMenuBtn" onclick="toggleAdminMenu()" style="margin-left:auto; cursor:pointer; user-select:none;">
+            {% if admin_logged_in %}
+            <span style="color:var(--green);"><i data-lucide="shield-check" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Admin ▾</span>
+            {% else %}
+            <span><i data-lucide="log-in" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Login</span>
+            {% endif %}
+            <div class="dropdown" id="adminDropdown" style="display:none; right:0; left:auto;">
+                {% if admin_logged_in %}
+                <a href="/logout"><i data-lucide="log-out" style="width:13px;height:13px;"></i>Odjava</a>
+                <span style="padding:10px 16px; color:var(--green); font-size:12px; display:block; font-weight:600; border-top:1px solid var(--border);"><i data-lucide="check-circle" style="width:12px;height:12px;margin-right:4px;vertical-align:middle;"></i>Prijavljen kao admin</span>
+                {% else %}
+                <a href="/login"><i data-lucide="log-in" style="width:13px;height:13px;"></i>Prijava</a>
+                {% endif %}
             </div>
         </div>
+
     </div>
+
+
 
     <div class="window-body">
 
@@ -200,7 +220,7 @@
                 <div class="value" style="color:{% if stats.score_pts >= 0 %}var(--accent){% else %}var(--red){% endif %};">
                     {% if stats.score_pts >= 0 %}+{% endif %}{{ stats.score_pts }}
                 </div>
-                <div class="sub">+1+tečaj / +1 void / −1−tečaj</div>
+                <div class="sub">+1+tečaj / +tečaj / −2−tečaj</div>
             </div>
             <div class="stat-card">
                 <div class="label">Prosj. tečaj</div>
@@ -228,7 +248,7 @@
         <div class="score-legend">
             <span><strong>Score formula:</strong></span>
             <span><i data-lucide="check-circle-2" style="width:11px;height:11px;vertical-align:middle;color:var(--green);margin-right:3px;"></i>Pogodak: <strong>+1 + tečaj</strong></span>
-            <span><i data-lucide="minus-circle" style="width:11px;height:11px;vertical-align:middle;color:var(--text-muted);margin-right:3px;"></i>Poništen: <strong>+1</strong></span>
+            <span><i data-lucide="minus-circle" style="width:11px;height:11px;vertical-align:middle;color:var(--text-muted);margin-right:3px;"></i>Poništen: <strong>+tečaj</strong></span>
             <span><i data-lucide="x-circle" style="width:11px;height:11px;vertical-align:middle;color:var(--red);margin-right:3px;"></i>Promašaj: <strong>−1 − tečaj</strong></span>
         </div>
 
@@ -311,6 +331,17 @@
         document.querySelectorAll('.dropdown').forEach(d => {
             if (!d.parentElement.contains(e.target)) d.style.display = 'none';
         });
+    });
+
+
+    function toggleAdminMenu() {
+        const d = document.getElementById('adminDropdown');
+        d.style.display = d.style.display === 'flex' ? 'none' : 'flex';
+    }
+    document.addEventListener('click', function(e) {
+        const btn = document.getElementById('adminMenuBtn');
+        const dd  = document.getElementById('adminDropdown');
+        if (dd && btn && !btn.contains(e.target)) dd.style.display = 'none';
     });
 
     lucide.createIcons();

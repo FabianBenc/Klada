@@ -102,6 +102,18 @@
             margin-bottom: 8px;
             align-items: center;
         }
+        @media (max-width: 540px) {
+            .pick-input-row {
+                grid-template-columns: 1fr;
+            }
+            .picks-grid {
+                grid-template-columns: 1fr;
+            }
+            .player-select-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
         .pick-num {
             font-size: 11px; font-weight: 700; color: var(--text-muted);
             min-width: 18px;
@@ -188,18 +200,37 @@
         <div class="title-bar-text"><span class="app-title">Parovi</span></div>
     </div>
 
-    <div class="menu-bar">
-        <div class="menu-item" onclick="this.querySelector('.dropdown').style.display = this.querySelector('.dropdown').style.display === 'flex' ? 'none' : 'flex'">
-            <i data-lucide="menu" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Navigacija
-            <div class="dropdown" style="display:none;">
-                <a href="/"><i data-lucide="home" style="width:13px;height:13px;"></i>Početna</a>
-                <a href="/leaderboard"><i data-lucide="trophy" style="width:13px;height:13px;"></i>Poredak</a>
-                <a href="/players"><i data-lucide="users" style="width:13px;height:13px;"></i>Igrači</a>
-                <a href="/pravila"><i data-lucide="book-open" style="width:13px;height:13px;"></i>Pravila</a>
-                {% if not admin_logged_in %}<a href="/login"><i data-lucide="log-in" style="width:13px;height:13px;"></i>Admin prijava</a>{% endif %}
+    <div class="menu-bar" id="mainMenuBar">
+
+        <a href="/"            class="menu-item" style="text-decoration:none;"><i data-lucide="home"        style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Početna</a>
+        <a href="/leaderboard" class="menu-item" style="text-decoration:none;"><i data-lucide="trophy"      style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Poredak</a>
+        <a href="/pravila"     class="menu-item" style="text-decoration:none;"><i data-lucide="scroll-text" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Pravila</a>
+        <a href="/players"     class="menu-item" style="text-decoration:none;"><i data-lucide="users"       style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Igrači</a>
+        <a href="/picks"       class="menu-item" style="text-decoration:none;"><i data-lucide="pencil-line" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Parovi</a>
+
+        {% if admin_logged_in %}
+        <a href="/update" class="menu-item" style="text-decoration:none; color:var(--accent);"><i data-lucide="refresh-cw" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Ažuriraj</a>
+        {% endif %}
+
+        <div class="menu-item" id="adminMenuBtn" onclick="toggleAdminMenu()" style="margin-left:auto; cursor:pointer; user-select:none;">
+            {% if admin_logged_in %}
+            <span style="color:var(--green);"><i data-lucide="shield-check" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Admin ▾</span>
+            {% else %}
+            <span><i data-lucide="log-in" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Login</span>
+            {% endif %}
+            <div class="dropdown" id="adminDropdown" style="display:none; right:0; left:auto;">
+                {% if admin_logged_in %}
+                <a href="/logout"><i data-lucide="log-out" style="width:13px;height:13px;"></i>Odjava</a>
+                <span style="padding:10px 16px; color:var(--green); font-size:12px; display:block; font-weight:600; border-top:1px solid var(--border);"><i data-lucide="check-circle" style="width:12px;height:12px;margin-right:4px;vertical-align:middle;"></i>Prijavljen kao admin</span>
+                {% else %}
+                <a href="/login"><i data-lucide="log-in" style="width:13px;height:13px;"></i>Prijava</a>
+                {% endif %}
             </div>
         </div>
+
     </div>
+
+
 
     <div class="window-body">
 
@@ -208,6 +239,13 @@
                     padding:10px 14px; margin-bottom:14px; color:var(--red); font-size:13px; display:flex; align-items:center; gap:8px;">
             <i data-lucide="lock" style="width:14px;height:14px;flex-shrink:0;"></i>
             Slot je zatvoren — više nije moguće slati parove.
+        </div>
+        {% endif %}
+        {% if request.args.get('error') == 'max' %}
+        <div style="background:rgba(229,115,115,0.12); border:1px solid rgba(229,115,115,0.3); border-radius:6px;
+                    padding:10px 14px; margin-bottom:14px; color:var(--red); font-size:13px; display:flex; align-items:center; gap:8px;">
+            <i data-lucide="alert-circle" style="width:14px;height:14px;flex-shrink:0;"></i>
+            Ovaj igrač je već prijavio 2 para — maksimum dostignut.
         </div>
         {% endif %}
 
@@ -268,23 +306,12 @@
                             {% if pick.odds %}<span class="pick-odds">{{ pick.odds }}</span>{% endif %}
                         </div>
                         <div class="pick-time">{{ pick.submitted_at }}</div>
-                        {% if slot.is_open %}
-                        <form method="POST" action="/picks/delete/{{ pick.id }}" style="margin-top:4px;">
-                            <input type="hidden" name="player_id" value="{{ pid }}">
-                            <button type="submit"
-                                    style="background:transparent; color:var(--text-muted); font-size:10px; padding:1px 6px; border:1px solid var(--border) !important;"
-                                    onclick="return confirm('Obriši ovaj par?')">
-                                <i data-lucide="trash-2" style="width:10px;height:10px;vertical-align:middle;"></i>
-                            </button>
-                        </form>
-                        {% endif %}
                         {% if admin_logged_in %}
-                        <form method="POST" action="/picks/delete/{{ pick.id }}" style="margin-top:2px;">
-                            <input type="hidden" name="player_id" value="{{ pid }}">
+                        <form method="POST" action="/picks/delete/{{ pick.id }}" style="margin-top:4px;">
                             <button type="submit"
-                                    style="background:rgba(229,115,115,0.15); color:var(--red); font-size:10px; padding:1px 6px; border:1px solid rgba(229,115,115,0.3) !important;"
-                                    onclick="return confirm('Admin: obriši ovaj par?')">
-                                Admin ✕
+                                    style="background:rgba(229,115,115,0.15); color:var(--red); font-size:10px; padding:2px 8px; border:1px solid rgba(229,115,115,0.3) !important;"
+                                    onclick="return confirm('Obriši ovaj par?')">
+                                <i data-lucide="trash-2" style="width:10px;height:10px;vertical-align:middle;"></i> Obriši
                             </button>
                         </form>
                         {% endif %}
@@ -303,43 +330,56 @@
             <!-- Submit form (only when open) -->
             {% if slot.is_open %}
             <div class="submit-section">
-                <h4><i data-lucide="send" style="width:12px;height:12px;vertical-align:middle;margin-right:4px;"></i>Prijavi svoje parove</h4>
-                <form method="POST" action="/picks/submit">
+                <h4><i data-lucide="send" style="width:12px;height:12px;vertical-align:middle;margin-right:4px;"></i>Prijavi par</h4>
+
+                {# Count how many picks each player already has for this slot #}
+                {% set pick_counts = {} %}
+                {% for pid, player_picks in slot.by_player.items() %}
+                    {% if pick_counts.update({pid: player_picks|length}) %}{% endif %}
+                {% endfor %}
+
+                <form method="POST" action="/picks/submit" id="form-{{ slot.slot_id }}" onchange="updatePickCount(this)">
                     <input type="hidden" name="slot_id" value="{{ slot.slot_id }}">
 
                     <div class="player-select-row">
                         <label>Igrač:</label>
-                        <select name="player_id" required
-                                style="min-width:140px; background:var(--surface2) !important; border:1px solid var(--border) !important; border-radius:6px !important; padding:6px 10px !important; font-size:13px !important; color:var(--text) !important;">
+                        <select name="player_id" required id="player-select-{{ slot.slot_id }}"
+                                onchange="checkPlayerLimit(this, {{ slot.slot_id }}, {{ pick_counts | tojson }})"
+                                style="min-width:140px; width:100%; max-width:300px; background:var(--surface2) !important; border:1px solid var(--border) !important; border-radius:6px !important; padding:6px 10px !important; font-size:13px !important; color:var(--text) !important;">
                             <option value="" disabled selected>— odaberi —</option>
                             {% for pid, pname in player_names.items() %}
-                            <option value="{{ pid }}">{{ pname }}</option>
+                            <option value="{{ pid }}" data-count="{{ pick_counts.get(pid, 0) }}">
+                                {{ pname }}
+                                {% if pick_counts.get(pid, 0) == 1 %} (1/2)
+                                {% elif pick_counts.get(pid, 0) >= 2 %} ✓ max
+                                {% endif %}
+                            </option>
                             {% endfor %}
                         </select>
                     </div>
 
-                    {% for i in range(2) %}
-                    <div style="margin-bottom:10px;">
-                        <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">
-                            Par {{ i+1 }}{% if i == 0 %} <span style="color:var(--red);">*</span>{% else %} <span style="color:var(--text-muted); font-weight:400;">(nije obavezno)</span>{% endif %}
-                        </div>
+                    <div id="limit-warning-{{ slot.slot_id }}"
+                         style="display:none; background:rgba(229,115,115,0.1); border:1px solid rgba(229,115,115,0.3);
+                                border-radius:6px; padding:8px 12px; margin-bottom:10px; font-size:12px; color:var(--red);">
+                        <i data-lucide="alert-circle" style="width:12px;height:12px;vertical-align:middle;margin-right:4px;"></i>
+                        Ovaj igrač je već prijavio 2 para — maksimum dostignut.
+                    </div>
+
+                    <div id="pick-form-fields-{{ slot.slot_id }}">
                         <div class="pick-input-row">
                             <input type="text" name="fixture"
-                                   placeholder="Utakmica (npr. Arsenal - Chelsea)"
-                                   {% if i == 0 %}required{% endif %}>
+                                   placeholder="Utakmica (npr. Arsenal - Chelsea)" required>
                             <input type="text" name="tip"
-                                   placeholder="Tip (1, X, 2, BTTS, Over 2.5...)"
-                                   {% if i == 0 %}required{% endif %}>
+                                   placeholder="Tip (1, X, 2, BTTS, Over 2.5...)">
                             <input type="number" name="odds"
                                    placeholder="Tečaj" step="0.01" min="1.01">
                         </div>
                     </div>
-                    {% endfor %}
 
-                    <div style="display:flex; justify-content:flex-end; margin-top:4px;">
-                        <button type="submit">
+                    <div style="display:flex; justify-content:flex-end; margin-top:4px;" id="submit-btn-{{ slot.slot_id }}">
+                        <button type="submit" style="width:100%;">
                             <i data-lucide="check" style="width:13px;height:13px;vertical-align:middle;margin-right:4px;"></i>
-                            Prijavi parove
+                            Dodaj par
                         </button>
                     </div>
                 </form>
@@ -405,6 +445,36 @@
         const isOpen = body.classList.contains('open');
         body.classList.toggle('open', !isOpen);
         if (arrow) arrow.style.transform = isOpen ? '' : 'rotate(180deg)';
+    }
+
+
+    function toggleAdminMenu() {
+        const d = document.getElementById('adminDropdown');
+        d.style.display = d.style.display === 'flex' ? 'none' : 'flex';
+    }
+    document.addEventListener('click', function(e) {
+        const btn = document.getElementById('adminMenuBtn');
+        const dd  = document.getElementById('adminDropdown');
+        if (dd && btn && !btn.contains(e.target)) dd.style.display = 'none';
+    });
+
+    // ── Player pick limit check ─────────────────────────────────────────────
+    function checkPlayerLimit(select, slotId, pickCounts) {
+        const pid = parseInt(select.value);
+        const count = pickCounts[pid] || 0;
+        const warning = document.getElementById('limit-warning-' + slotId);
+        const fields  = document.getElementById('pick-form-fields-' + slotId);
+        const btn     = document.getElementById('submit-btn-' + slotId);
+        if (count >= 2) {
+            warning.style.display = 'block';
+            fields.style.display  = 'none';
+            btn.style.display     = 'none';
+        } else {
+            warning.style.display = 'none';
+            fields.style.display  = 'block';
+            btn.style.display     = 'flex';
+        }
+        lucide.createIcons();
     }
 
     // ── Countdown timers ────────────────────────────────────────────────────

@@ -81,7 +81,7 @@
         Poredak: <strong>1.</strong> broj pogodaka &nbsp;›&nbsp;
         <strong>2.</strong> prosječni tečaj (tiebreak).
         &nbsp;·&nbsp; Score: <strong>+1+tečaj</strong> pogodak &nbsp;·&nbsp;
-        <strong>+1</strong> poništen &nbsp;·&nbsp;
+        <strong>+tečaj</strong> poništen &nbsp;·&nbsp;
         <strong>−1−tečaj</strong> promašaj.
     </p>
 
@@ -94,7 +94,7 @@
                     <th><i data-lucide="check-circle-2" style="width:13px;height:13px;color:#4ade80;vertical-align:middle;"></i></th>
                     <th><i data-lucide="x-circle" style="width:13px;height:13px;color:var(--red);vertical-align:middle;"></i></th>
                     <th class="hide-mobile" title="Broj poništenih parova"><i data-lucide="minus-circle" style="width:13px;height:13px;color:var(--text-muted);vertical-align:middle;margin-right:3px;"></i></th>
-                    <th title="Score: +1+tečaj pogodak · +1 poništen · −1−tečaj promašaj">Score</th>
+                    <th title="Score: +1+tečaj pogodak · +tečaj poništen · −1−tečaj promašaj">Score</th>
                     <th class="hide-mobile">Prosj. tečaj</th>
                     <th class="hide-mobile">Najveći tečaj</th>
                     <th><i data-lucide="flame" style="width:13px;height:13px;color:var(--accent);vertical-align:middle;margin-right:3px;"></i>Niz</th>
@@ -110,12 +110,7 @@
                         {% else %}<span style="color:var(--text-muted);">{{ loop.index }}</span>
                         {% endif %}
                     </td>
-                    <td style="font-weight:600;">
-                        <a href="/player/{{ player.player_id }}" style="color:var(--text); text-decoration:none;"
-                           onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text)'">
-                            {{ player.name }}
-                        </a>
-                    </td>
+                    <td style="font-weight:600;">{{ player.name }}</td>
                     <td class="WON">{{ player.guessed }}</td>
                     <td class="LOST">{{ player.missed }}</td>
                     <td class="hide-mobile" style="color:var(--text-muted);">
@@ -200,16 +195,37 @@
         <div class="title-bar-text"><span class="app-title"><i data-lucide="trophy" style="width:20px;height:20px;margin-right:8px;vertical-align:middle;"></i>Poredak</span></div>
     </div>
 
-    <div class="menu-bar">
-        <div class="menu-item" onclick="this.querySelector('.dropdown').style.display = this.querySelector('.dropdown').style.display === 'flex' ? 'none' : 'flex'">
-            <i data-lucide="menu" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Navigacija
-            <div class="dropdown" style="display:none;">
-                <a href="/"><i data-lucide="arrow-left" style="width:13px;height:13px;"></i>Natrag na početnu</a>
-                <a href="/pravila"><i data-lucide="scroll-text" style="width:13px;height:13px;"></i>Pravila igre</a>
-                {% if not admin_logged_in %}<a href="/login"><i data-lucide="log-in" style="width:13px;height:13px;"></i>Admin prijava</a>{% endif %}
+    <div class="menu-bar" id="mainMenuBar">
+
+        <a href="/"            class="menu-item" style="text-decoration:none;"><i data-lucide="home"        style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Početna</a>
+        <a href="/leaderboard" class="menu-item" style="text-decoration:none;"><i data-lucide="trophy"      style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Poredak</a>
+        <a href="/pravila"     class="menu-item" style="text-decoration:none;"><i data-lucide="scroll-text" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Pravila</a>
+        <a href="/players"     class="menu-item" style="text-decoration:none;"><i data-lucide="users"       style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Igrači</a>
+        <a href="/picks"       class="menu-item" style="text-decoration:none;"><i data-lucide="pencil-line" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Parovi</a>
+
+        {% if admin_logged_in %}
+        <a href="/update" class="menu-item" style="text-decoration:none; color:var(--accent);"><i data-lucide="refresh-cw" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Ažuriraj</a>
+        {% endif %}
+
+        <div class="menu-item" id="adminMenuBtn" onclick="toggleAdminMenu()" style="margin-left:auto; cursor:pointer; user-select:none;">
+            {% if admin_logged_in %}
+            <span style="color:var(--green);"><i data-lucide="shield-check" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Admin ▾</span>
+            {% else %}
+            <span><i data-lucide="log-in" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Login</span>
+            {% endif %}
+            <div class="dropdown" id="adminDropdown" style="display:none; right:0; left:auto;">
+                {% if admin_logged_in %}
+                <a href="/logout"><i data-lucide="log-out" style="width:13px;height:13px;"></i>Odjava</a>
+                <span style="padding:10px 16px; color:var(--green); font-size:12px; display:block; font-weight:600; border-top:1px solid var(--border);"><i data-lucide="check-circle" style="width:12px;height:12px;margin-right:4px;vertical-align:middle;"></i>Prijavljen kao admin</span>
+                {% else %}
+                <a href="/login"><i data-lucide="log-in" style="width:13px;height:13px;"></i>Prijava</a>
+                {% endif %}
             </div>
         </div>
+
     </div>
+
+
 
     <div class="window-body">
 
@@ -388,6 +404,17 @@
                 });
             });
     }
+
+
+    function toggleAdminMenu() {
+        const d = document.getElementById('adminDropdown');
+        d.style.display = d.style.display === 'flex' ? 'none' : 'flex';
+    }
+    document.addEventListener('click', function(e) {
+        const btn = document.getElementById('adminMenuBtn');
+        const dd  = document.getElementById('adminDropdown');
+        if (dd && btn && !btn.contains(e.target)) dd.style.display = 'none';
+    });
 
     // Draw overall chart immediately
     drawChart('overall');
