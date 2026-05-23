@@ -933,7 +933,6 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
         c.execute(f"SELECT COALESCE(SUM(1+odds),0) FROM bets WHERE player=? AND ticket_id IN ({placeholders}) AND result='WINNING'",
                   [player_id] + tid_list)
         s_win = c.fetchone()[0] or 0
-        # Score VOIDED = +1 flat
         c.execute(f"SELECT COALESCE(COUNT(*),0) FROM bets WHERE player=? AND ticket_id IN ({placeholders}) AND result IN ('VOIDED','WINNING_VOIDED')",
                   [player_id] + tid_list)
         s_void = c.fetchone()[0] or 0
@@ -979,19 +978,16 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
             ticket_pids = [r[0] for r in c.fetchall()]
         if not ticket_pids:
             continue
-
         is_first = (i == 0)
         if not is_first:
             prev_id = ticket_ids[i - 1]
             if ticket_period_map.get(ticket_id) != ticket_period_map.get(prev_id):
                 is_first = True
-
         if is_first:
             for pid in ticket_pids:
                 if pid in payments:
                     payments[pid] += 1.0
             continue
-
         prev_ticket_id = ticket_ids[i - 1]
         c.execute("SELECT player_id FROM ticket_players WHERE ticket_id=?", (prev_ticket_id,))
         prev_snap = c.fetchall()
@@ -999,7 +995,6 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
         if not prev_pids:
             c.execute("SELECT DISTINCT player FROM bets WHERE ticket_id=?", (prev_ticket_id,))
             prev_pids = [r[0] for r in c.fetchall()]
-
         prev_count = len(prev_pids)
         losers = set()
         for pid in prev_pids:
@@ -1007,7 +1002,6 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
                       (prev_ticket_id, pid))
             if c.fetchone()[0] > 0:
                 losers.add(pid)
-
         if losers:
             cost_per_loser = round(prev_count / len(losers), 2)
             for pid in losers:
@@ -1017,7 +1011,6 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
             for pid in ticket_pids:
                 if pid in payments:
                     payments[pid] += 1.0
-
         new_players = set(ticket_pids) - set(prev_pids)
         for pid in new_players:
             if pid in payments:
@@ -1260,14 +1253,23 @@ def player_profile(player_id):
 def get_current_slot_info():
     from datetime import datetime, timedelta
     now = datetime.now()
+    # Monday of current week
     monday = now - timedelta(days=now.weekday())
     monday = monday.replace(hour=0, minute=0, second=0, microsecond=0)
-    weekday_opens = monday
-    weekday_locks = monday + timedelta(days=1)
-    weekend_opens = monday + timedelta(days=1)
-    weekend_locks = monday + timedelta(days=4, hours=12)
+
+    # Tjedni tiket: opens Sunday 00:00 (day before monday = monday - 1 day)
+    #               locks Tuesday 00:00
+    weekday_opens = monday - timedelta(days=1)          # Sunday 00:00
+    weekday_locks = monday + timedelta(days=1)          # Tuesday 00:00
+
+    # Vikend tiket: opens Wednesday 00:00
+    #               locks Friday 12:00
+    weekend_opens = monday + timedelta(days=2)          # Wednesday 00:00
+    weekend_locks = monday + timedelta(days=4, hours=12) # Friday 12:00
+
     iso_year, iso_week, _ = now.isocalendar()
     base = f"{iso_year}-W{iso_week:02d}"
+
     return [
         {"slot_type": "weekday", "week_label": f"{base}-weekday",
          "opens_at": weekday_opens.strftime("%Y-%m-%d %H:%M"),
