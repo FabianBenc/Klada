@@ -252,10 +252,10 @@
         <!-- ── Info bar ─────────────────────────────────────────────────── -->
         <div style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:18px; font-size:12px; color:var(--text-muted);">
             <span><i data-lucide="info" style="width:12px;height:12px;vertical-align:middle;margin-right:3px;"></i>
-                Tjedni tiket: zatvara se <strong style="color:var(--text);">utorak u ponoć</strong>
+                Radni tjedan: zatvara se <strong style="color:var(--text);">utorak u ponoć</strong>
             </span>
             <span>
-                Vikend tiket: zatvara se <strong style="color:var(--text);">petak u 12:00</strong>
+                Vikend: zatvara se <strong style="color:var(--text);">petak u 12:00</strong>
             </span>
             <span>
                 Svaki igrač može prijaviti <strong style="color:var(--text);">1 ili 2 para</strong>
@@ -400,7 +400,10 @@
             <div class="history-header" onclick="toggleHistory(this)">
                 <i data-lucide="{% if hs.slot_type == 'weekday' %}briefcase{% else %}sun{% endif %}"
                    style="width:13px;height:13px;color:var(--text-muted);flex-shrink:0;"></i>
-                <span style="font-weight:600; font-size:13px; color:var(--text);">{{ hs.week_label }}</span>
+                <span style="font-weight:600; font-size:13px; color:var(--text);">
+                    {% if hs.slot_type == 'weekday' %}Radni tjedan{% else %}Vikend{% endif %}
+                    <span style="font-weight:400; color:var(--text-muted);">· {{ hs.week_label.split('-W')[1].split('-')[0] }}. tjedan</span>
+                </span>
                 <span style="font-size:11px; color:var(--text-muted); margin-left:6px;">zatvoren {{ hs.locks_at }}</span>
                 <span style="margin-left:auto; font-size:11px; color:var(--text-muted);">
                     {{ hs.player_count }} igrač{% if hs.player_count != 1 %}a{% endif %} · {{ hs.pick_count }} par{% if hs.pick_count != 1 %}ova{% endif %}
