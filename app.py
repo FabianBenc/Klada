@@ -1253,21 +1253,22 @@ def player_profile(player_id):
 def get_current_slot_info():
     from datetime import datetime, timedelta
     now = datetime.now()
-    # Monday of current week
-    monday = now - timedelta(days=now.weekday())
-    monday = monday.replace(hour=0, minute=0, second=0, microsecond=0)
+    weekday = now.weekday()  # 0=Mon … 5=Sat, 6=Sun
 
-    # Tjedni tiket: opens Sunday 00:00 (day before monday = monday - 1 day)
-    #               locks Tuesday 00:00
-    weekday_opens = monday - timedelta(days=1)          # Sunday 00:00
-    weekday_locks = monday + timedelta(days=1)          # Tuesday 00:00
+    # Sunday belongs to the UPCOMING week's slot (opens Sunday, locks Tuesday).
+    # Mon–Sat belong to the current week's Monday.
+    if weekday == 6:
+        next_monday = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    else:
+        next_monday = (now - timedelta(days=weekday)).replace(hour=0, minute=0, second=0, microsecond=0)
 
-    # Vikend tiket: opens Wednesday 00:00
-    #               locks Friday 12:00
-    weekend_opens = monday + timedelta(days=2)          # Wednesday 00:00
-    weekend_locks = monday + timedelta(days=4, hours=12) # Friday 12:00
+    weekday_opens = next_monday - timedelta(days=1)           # Sunday 00:00
+    weekday_locks = next_monday + timedelta(days=1)           # Tuesday 00:00
+    weekend_opens = next_monday + timedelta(days=2)           # Wednesday 00:00
+    weekend_locks = next_monday + timedelta(days=4, hours=12) # Friday 12:00
 
-    iso_year, iso_week, _ = now.isocalendar()
+    # Always use Monday's ISO week for the label so Sunday and Mon–Fri agree
+    iso_year, iso_week, _ = next_monday.isocalendar()
     base = f"{iso_year}-W{iso_week:02d}"
 
     return [
