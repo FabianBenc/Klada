@@ -82,11 +82,35 @@
             <div class="title-bar-text" style="font-size:13px;">Dodaj tiket</div>
         </div>
         <div class="window-body" style="padding:12px 14px;">
+            {% if submit_error %}
+            <div style="background:rgba(229,115,115,0.12); border:1px solid rgba(229,115,115,0.4);
+                        border-radius:6px; padding:10px 14px; margin-bottom:10px;
+                        color:var(--red); font-size:13px; display:flex; align-items:center; gap:8px;">
+                <i data-lucide="alert-triangle" style="width:14px;height:14px;flex-shrink:0;"></i>
+                <span>{{ submit_error }} <a href="/leaderboard" style="color:var(--accent); margin-left:4px;">→ Idi na Poredak</a></span>
+            </div>
+            {% endif %}
+            {% if not periods %}
+            <div style="background:rgba(0,173,181,0.08); border:1px solid rgba(0,173,181,0.25);
+                        border-radius:6px; padding:10px 14px; margin-bottom:10px;
+                        color:var(--text-muted); font-size:13px; display:flex; align-items:center; gap:8px;">
+                <i data-lucide="info" style="width:14px;height:14px;flex-shrink:0;"></i>
+                <span>Nema aktivnog perioda. <a href="/leaderboard" style="color:var(--accent);">Kreirajte period</a> prije dodavanja tiketa.</span>
+            </div>
+            {% endif %}
             <form method="POST" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                 <input type="text" name="ticket_number" placeholder="URL tiketa (applink.psk.hr/...)" required
-                       style="flex:1; min-width:200px;">
-                <button type="submit" style="white-space:nowrap;">+ Dodaj tiket</button>
+                       style="flex:1; min-width:200px;" {% if not periods %}disabled{% endif %}>
+                <button type="submit" style="white-space:nowrap;" {% if not periods %}disabled{% endif %}>+ Dodaj PSK tiket</button>
             </form>
+            <div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
+                <a href="/ticket/manual">
+                    <button type="button" style="width:100%; background:var(--surface2); color:var(--text); border:1px solid var(--border) !important;">
+                        <i data-lucide="pencil" style="width:13px;height:13px;vertical-align:middle;margin-right:5px;"></i>
+                        Kreiraj ručni tiket (Favbet, Maxbet...)
+                    </button>
+                </a>
+            </div>
         </div>
     </div>
 
