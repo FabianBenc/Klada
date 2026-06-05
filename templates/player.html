@@ -153,17 +153,14 @@
     </div>
 
     <div class="menu-bar" id="mainMenuBar">
-
         <a href="/"            class="menu-item" style="text-decoration:none;"><i data-lucide="home"        style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Početna</a>
         <a href="/leaderboard" class="menu-item" style="text-decoration:none;"><i data-lucide="trophy"      style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Poredak</a>
         <a href="/pravila"     class="menu-item" style="text-decoration:none;"><i data-lucide="scroll-text" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Pravila</a>
         <a href="/players"     class="menu-item" style="text-decoration:none;"><i data-lucide="users"       style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Igrači</a>
         <a href="/picks"       class="menu-item" style="text-decoration:none;"><i data-lucide="pencil-line" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Parovi</a>
-
         {% if admin_logged_in %}
         <a href="/update" class="menu-item" style="text-decoration:none; color:var(--accent);"><i data-lucide="refresh-cw" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Ažuriraj</a>
         {% endif %}
-
         <div class="menu-item" id="adminMenuBtn" onclick="toggleAdminMenu()" style="margin-left:auto; cursor:pointer; user-select:none;">
             {% if admin_logged_in %}
             <span style="color:var(--green);"><i data-lucide="shield-check" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Admin ▾</span>
@@ -173,11 +170,12 @@
             <div class="dropdown" id="adminDropdown" style="display:none; right:0; left:auto;">
                 {% if admin_logged_in %}
                 <a href="/logout"><i data-lucide="log-out" style="width:13px;height:13px;"></i>Odjava</a>
-                <span style="padding:10px 16px; color:var(--green); font-size:12px; display:block; font-weight:600; border-top:1px solid var(--border);"><i data-lucide="check-circle" style="width:12px;height:12px;margin-right:4px;vertical-align:middle;"></i>Prijavljen kao admin</span>
                 {% else %}
                 <a href="/login"><i data-lucide="log-in" style="width:13px;height:13px;"></i>Prijava</a>
                 {% endif %}
             </div>
+        </div>
+    </div>
         </div>
 
     </div>

@@ -212,6 +212,16 @@ def init_db():
         c.execute("INSERT OR IGNORE INTO loss_streaks (player, streak) VALUES (?, 0)", (pid,))
         c.execute("INSERT OR IGNORE INTO win_streaks (player, streak, max_streak) VALUES (?, 0, 0)", (pid,))
 
+    c.execute("""CREATE TABLE IF NOT EXISTS pick_slots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, slot_type TEXT NOT NULL,
+        week_label TEXT NOT NULL, opens_at TEXT NOT NULL,
+        locks_at TEXT NOT NULL, created_at TEXT NOT NULL)""")
+    c.execute("""CREATE TABLE IF NOT EXISTS picks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        slot_id INTEGER NOT NULL REFERENCES pick_slots(id),
+        player_id INTEGER NOT NULL REFERENCES players(id),
+        fixture TEXT NOT NULL, tip TEXT NOT NULL, odds REAL, submitted_at TEXT NOT NULL)""")
+
     conn.commit()
     conn.close()
 
@@ -911,7 +921,7 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
         c.execute(f"SELECT COALESCE(SUM(1+odds),0) FROM bets WHERE player=? AND ticket_id IN ({placeholders}) AND result='WINNING'",
                   [player_id] + tid_list)
         s_win = c.fetchone()[0] or 0
-        c.execute(f"SELECT COALESCE(SUM(odds),0) FROM bets WHERE player=? AND ticket_id IN ({placeholders}) AND result IN ('VOIDED','WINNING_VOIDED')",
+        c.execute(f"SELECT COALESCE(COUNT(*),0) FROM bets WHERE player=? AND ticket_id IN ({placeholders}) AND result IN ('VOIDED','WINNING_VOIDED')",
                   [player_id] + tid_list)
         s_void = c.fetchone()[0] or 0
         c.execute(f"SELECT COALESCE(SUM(-1-odds),0) FROM bets WHERE player=? AND ticket_id IN ({placeholders}) AND result='LOSING'",
@@ -935,59 +945,68 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
     leaderboard_data.sort(key=lambda x: (x["guessed"], x["avg_odds"]), reverse=True)
 
     # ── Payment calculation ───────────────────────────────────────────────────
-    resolved_ticket_ids = [tid for tid in ticket_ids]  # already ordered
+    if ticket_ids:
+        c.execute(
+            "SELECT ticket_id, period_id FROM tickets WHERE ticket_id IN ({}) ORDER BY id ASC".format(
+                ",".join("?" * len(ticket_ids))
+            ),
+            list(ticket_ids),
+        )
+        ticket_period_map = {r[0]: r[1] for r in c.fetchall()}
+    else:
+        ticket_period_map = {}
 
     payments = {pid: 0.0 for pid in player_names}
-    for i, ticket_id in enumerate(resolved_ticket_ids):
+    for i, ticket_id in enumerate(ticket_ids):
         c.execute("SELECT player_id FROM ticket_players WHERE ticket_id=?", (ticket_id,))
         snap = c.fetchall()
         ticket_pids = [r[0] for r in snap] if snap else []
         if not ticket_pids:
             c.execute("SELECT DISTINCT player FROM bets WHERE ticket_id=?", (ticket_id,))
             ticket_pids = [r[0] for r in c.fetchall()]
-
-        num_on_ticket = len(ticket_pids)
-        if num_on_ticket == 0:
+        if not ticket_pids:
             continue
-
-        if i == 0:
+        is_first = (i == 0)
+        if not is_first:
+            prev_id = ticket_ids[i - 1]
+            if ticket_period_map.get(ticket_id) != ticket_period_map.get(prev_id):
+                is_first = True
+        if is_first:
             for pid in ticket_pids:
                 if pid in payments:
                     payments[pid] += 1.0
+            continue
+        prev_ticket_id = ticket_ids[i - 1]
+        c.execute("SELECT player_id FROM ticket_players WHERE ticket_id=?", (prev_ticket_id,))
+        prev_snap = c.fetchall()
+        prev_pids = [r[0] for r in prev_snap] if prev_snap else []
+        if not prev_pids:
+            c.execute("SELECT DISTINCT player FROM bets WHERE ticket_id=?", (prev_ticket_id,))
+            prev_pids = [r[0] for r in c.fetchall()]
+        prev_count = len(prev_pids)
+        losers = set()
+        for pid in prev_pids:
+            c.execute("SELECT COUNT(*) FROM bets WHERE ticket_id=? AND player=? AND result='LOSING'",
+                      (prev_ticket_id, pid))
+            if c.fetchone()[0] > 0:
+                losers.add(pid)
+        if losers:
+            cost_per_loser = round(prev_count / len(losers), 2)
+            for pid in losers:
+                if pid in payments:
+                    payments[pid] += cost_per_loser
         else:
-            prev_ticket_id = resolved_ticket_ids[i - 1]
-            c.execute("SELECT player_id FROM ticket_players WHERE ticket_id=?", (prev_ticket_id,))
-            prev_snap = c.fetchall()
-            prev_pids = [r[0] for r in prev_snap] if prev_snap else []
-            if not prev_pids:
-                c.execute("SELECT DISTINCT player FROM bets WHERE ticket_id=?", (prev_ticket_id,))
-                prev_pids = [r[0] for r in c.fetchall()]
-
-            new_players = set(ticket_pids) - set(prev_pids)
-            for pid in new_players:
+            for pid in ticket_pids:
                 if pid in payments:
                     payments[pid] += 1.0
-
-            losers = set()
-            for pid in prev_pids:
-                c.execute("SELECT COUNT(*) FROM bets WHERE ticket_id=? AND player=? AND result='LOSING'",
-                          (prev_ticket_id, pid))
-                if c.fetchone()[0] > 0:
-                    losers.add(pid)
-
-            if losers:
-                covered_by_new = len(new_players)
-                remaining_cost = num_on_ticket - covered_by_new
-                if remaining_cost > 0:
-                    cost_per_loser = round(remaining_cost / len(losers), 2)
-                    for pid in losers:
-                        if pid in payments:
-                            payments[pid] += cost_per_loser
+        new_players = set(ticket_pids) - set(prev_pids)
+        for pid in new_players:
+            if pid in payments:
+                payments[pid] += 1.0
 
     # ── Winnings calculation ──────────────────────────────────────────────────
-    # For each WINNING ticket, split payout equally among all players on that ticket.
     winnings = {pid: 0.0 for pid in player_names}
-    for ticket_id in resolved_ticket_ids:
+    for ticket_id in ticket_ids:
         c.execute("SELECT ticket_result, payout FROM tickets WHERE ticket_id=?", (ticket_id,))
         t_row = c.fetchone()
         if not t_row or t_row[0] != "WINNING" or t_row[1] is None:
@@ -1275,7 +1294,7 @@ def player_profile(player_id):
     best_odds = c.fetchone()[0]
     c.execute("SELECT COALESCE(SUM(1+odds),0) FROM bets WHERE player=? AND result='WINNING'", (player_id,))
     s_win = c.fetchone()[0] or 0
-    c.execute("SELECT COALESCE(SUM(odds),0) FROM bets WHERE player=? AND result IN ('VOIDED','WINNING_VOIDED')", (player_id,))
+    c.execute("SELECT COALESCE(COUNT(*),0) FROM bets WHERE player=? AND result IN ('VOIDED','WINNING_VOIDED')", (player_id,))
     s_void = c.fetchone()[0] or 0
     c.execute("SELECT COALESCE(SUM(-1-odds),0) FROM bets WHERE player=? AND result='LOSING'", (player_id,))
     s_lose = c.fetchone()[0] or 0
@@ -1310,6 +1329,191 @@ def player_profile(player_id):
         normalize_result=normalize_result,
         admin_logged_in=session.get("admin_logged_in"),
     )
+
+
+
+# ---------------------------------------------------------------------------
+# Picks helpers & routes
+# ---------------------------------------------------------------------------
+
+def get_current_slot_info():
+    from datetime import datetime, timedelta
+    now = datetime.now()
+    weekday = now.weekday()
+    if weekday == 6:
+        next_monday = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    else:
+        next_monday = (now - timedelta(days=weekday)).replace(hour=0, minute=0, second=0, microsecond=0)
+    weekday_opens = next_monday - timedelta(days=1)
+    weekday_locks = next_monday + timedelta(days=1)
+    weekend_opens = next_monday + timedelta(days=2)
+    weekend_locks = next_monday + timedelta(days=4, hours=12)
+    iso_year, iso_week, _ = next_monday.isocalendar()
+    base = f"{iso_year}-W{iso_week:02d}"
+    return [
+        {"slot_type": "weekday", "week_label": f"{base}-weekday",
+         "opens_at": weekday_opens.strftime("%Y-%m-%d %H:%M"),
+         "locks_at": weekday_locks.strftime("%Y-%m-%d %H:%M"),
+         "label": f"Radni tjedan (tjedan {iso_week})",
+         "is_open": weekday_opens <= now < weekday_locks,
+         "is_locked": now >= weekday_locks},
+        {"slot_type": "weekend", "week_label": f"{base}-weekend",
+         "opens_at": weekend_opens.strftime("%Y-%m-%d %H:%M"),
+         "locks_at": weekend_locks.strftime("%Y-%m-%d %H:%M"),
+         "label": f"Vikend (tjedan {iso_week})",
+         "is_open": weekend_opens <= now < weekend_locks,
+         "is_locked": now >= weekend_locks},
+    ]
+
+
+def ensure_slots_exist(c, slots, now_str):
+    slot_ids = {}
+    for s in slots:
+        c.execute("SELECT id FROM pick_slots WHERE week_label=?", (s["week_label"],))
+        row = c.fetchone()
+        if row:
+            slot_ids[s["slot_type"]] = row[0]
+        else:
+            c.execute("INSERT INTO pick_slots (slot_type,week_label,opens_at,locks_at,created_at) VALUES (?,?,?,?,?)",
+                      (s["slot_type"], s["week_label"], s["opens_at"], s["locks_at"], now_str))
+            slot_ids[s["slot_type"]] = c.lastrowid
+    return slot_ids
+
+
+@app.route("/picks")
+def picks():
+    from datetime import datetime
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    player_names = get_player_names(conn)
+    slots = get_current_slot_info()
+    slot_ids = ensure_slots_exist(c, slots, now_str)
+    conn.commit()
+    slot_data = []
+    for s in slots:
+        sid = slot_ids[s["slot_type"]]
+        c.execute("""SELECT p.id, p.player_id, pl.name, p.fixture, p.tip, p.odds, p.submitted_at
+                     FROM picks p JOIN players pl ON pl.id=p.player_id
+                     WHERE p.slot_id=? ORDER BY p.submitted_at ASC""", (sid,))
+        by_player = {}
+        for row in c.fetchall():
+            pid = row[1]
+            if pid not in by_player: by_player[pid] = []
+            by_player[pid].append({"id": row[0], "player_id": pid, "player_name": row[2],
+                                   "fixture": row[3], "tip": row[4], "odds": row[5], "submitted_at": row[6]})
+        slot_data.append({**s, "slot_id": sid, "by_player": by_player})
+    current_ids = list(slot_ids.values())
+    ph = ",".join("?" * len(current_ids))
+    c.execute(f"""SELECT ps.id, ps.slot_type, ps.week_label, ps.locks_at,
+                        COUNT(DISTINCT p.player_id), COUNT(p.id)
+                  FROM pick_slots ps LEFT JOIN picks p ON p.slot_id=ps.id
+                  WHERE ps.id NOT IN ({ph})
+                  GROUP BY ps.id ORDER BY ps.id DESC LIMIT 10""", current_ids)
+    history = []
+    for hs in c.fetchall():
+        hsid = hs[0]
+        c.execute("""SELECT p.id, p.player_id, pl.name, p.fixture, p.tip, p.odds
+                     FROM picks p JOIN players pl ON pl.id=p.player_id
+                     WHERE p.slot_id=? ORDER BY p.player_id, p.submitted_at ASC""", (hsid,))
+        by_player = {}
+        for row in c.fetchall():
+            pid = row[1]
+            if pid not in by_player: by_player[pid] = []
+            by_player[pid].append({"id": row[0], "player_id": pid, "player_name": row[2],
+                                   "fixture": row[3], "tip": row[4], "odds": row[5]})
+        history.append({"slot_id": hsid, "slot_type": hs[1], "week_label": hs[2],
+                        "locks_at": hs[3], "player_count": hs[4], "pick_count": hs[5], "by_player": by_player})
+    conn.close()
+    return render_template("picks.html", slots=slot_data, history=history,
+                           player_names=player_names, admin_logged_in=session.get("admin_logged_in"))
+
+
+@app.route("/picks/submit", methods=["POST"])
+def picks_submit():
+    from datetime import datetime
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    player_id = request.form.get("player_id", type=int)
+    slot_id   = request.form.get("slot_id", type=int)
+    fixture   = request.form.get("fixture", "").strip()
+    tip       = request.form.get("tip", "").strip()
+    try:
+        odds = float(request.form.get("odds", "")) if request.form.get("odds") else None
+    except ValueError:
+        odds = None
+    if not player_id or not slot_id or not fixture or not tip:
+        return redirect("/picks")
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT locks_at FROM pick_slots WHERE id=?", (slot_id,))
+    row = c.fetchone()
+    if not row or now_str >= row[0]:
+        conn.close()
+        return redirect("/picks?error=locked")
+    c.execute("SELECT COUNT(*) FROM picks WHERE slot_id=? AND player_id=?", (slot_id, player_id))
+    if c.fetchone()[0] >= 2:
+        conn.close()
+        return redirect("/picks?error=max")
+    c.execute("INSERT INTO picks (slot_id,player_id,fixture,tip,odds,submitted_at) VALUES (?,?,?,?,?,?)",
+              (slot_id, player_id, fixture, tip, odds, now_str))
+    conn.commit()
+    conn.close()
+    return redirect("/picks")
+
+
+@app.route("/picks/delete/<int:pick_id>", methods=["POST"])
+def picks_delete(pick_id):
+    if not session.get("admin_logged_in"):
+        return "Unauthorized", 403
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("DELETE FROM picks WHERE id=?", (pick_id,))
+    conn.commit()
+    conn.close()
+    return redirect("/picks")
+
+
+@app.route("/ticket/edit/<ticket_id>", methods=["GET", "POST"])
+def edit_ticket(ticket_id):
+    if not session.get("admin_logged_in"):
+        return redirect("/login")
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    player_names = get_player_names(conn)
+    c.execute("SELECT ticket_id, created_at, ticket_result, payout FROM tickets WHERE ticket_id=?", (ticket_id,))
+    ticket = c.fetchone()
+    if not ticket:
+        conn.close()
+        return "Tiket nije pronađen.", 404
+    error = None
+    success = None
+    if request.method == "POST":
+        ticket_result = request.form.get("ticket_result", "PENDING")
+        payout_raw    = request.form.get("payout", "").strip()
+        payout        = float(payout_raw) if payout_raw else None
+        bet_ids = request.form.getlist("bet_id")
+        results = request.form.getlist("result")
+        scores  = request.form.getlist("score")
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        c.execute("UPDATE tickets SET ticket_result=?, payout=?, last_updated=? WHERE ticket_id=?",
+                  (ticket_result, payout, now, ticket_id))
+        for i, bid in enumerate(bet_ids):
+            leg_result = results[i] if i < len(results) else "PENDING"
+            score_val  = scores[i].strip() if i < len(scores) else ""
+            c.execute("UPDATE bets SET result=?, score=? WHERE id=?",
+                      (leg_result, score_val or None, bid))
+        conn.commit()
+        recalculate_all_streaks()
+        c.execute("SELECT ticket_id, created_at, ticket_result, payout FROM tickets WHERE ticket_id=?", (ticket_id,))
+        ticket = c.fetchone()
+        success = "Tiket uspješno ažuriran."
+    c.execute("""SELECT b.id, b.fixture_name, b.player, b.odds, b.result, b.start_time, b.score
+                 FROM bets b WHERE b.ticket_id=? ORDER BY b.id ASC""", (ticket_id,))
+    legs = c.fetchall()
+    conn.close()
+    return render_template("edit_ticket.html", ticket=ticket, legs=legs,
+                           player_names=player_names, admin_logged_in=True,
+                           error=error, success=success)
 
 
 # ---------------------------------------------------------------------------
