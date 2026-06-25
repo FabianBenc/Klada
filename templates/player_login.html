@@ -4,7 +4,7 @@
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='icon.png') }}">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Login – Propali Kladioničari</title>
+    <title>Prijava igrača – Propali Kladioničari</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,7 +16,7 @@
 
 <div class="window" style="max-width: 360px; margin: 80px auto;">
     <div class="title-bar" style="padding:12px 18px;">
-        <div class="title-bar-text"><span style="font-family:'Bebas Neue'; letter-spacing:2px; font-size:16px;"><i data-lucide="key-round" style="width:14px;height:14px;margin-right:5px;vertical-align:middle;"></i>Admin Login</span></div>
+        <div class="title-bar-text"><span style="font-family:'Bebas Neue'; letter-spacing:2px; font-size:16px;"><i data-lucide="user-round" style="width:14px;height:14px;margin-right:5px;vertical-align:middle;"></i>Prijava igrača</span></div>
     </div>
 
     <div class="menu-bar" id="mainMenuBar">
@@ -25,31 +25,17 @@
         <a href="/pravila"     class="menu-item" style="text-decoration:none;"><i data-lucide="scroll-text" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Pravila</a>
         <a href="/players"     class="menu-item" style="text-decoration:none;"><i data-lucide="users"       style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Igrači</a>
         <a href="/picks"       class="menu-item" style="text-decoration:none;"><i data-lucide="pencil-line" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Parovi</a>
-        {% if admin_logged_in %}
-        <a href="/update" class="menu-item" style="text-decoration:none; color:var(--accent);"><i data-lucide="refresh-cw" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Ažuriraj</a>
-        {% endif %}
         <div class="menu-item" id="adminMenuBtn" onclick="toggleAdminMenu()" style="margin-left:auto; cursor:pointer; user-select:none;">
-            {% if admin_logged_in %}
-            <span style="color:var(--green);"><i data-lucide="shield-check" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Admin ▾</span>
-            {% else %}
             <span><i data-lucide="log-in" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Login</span>
-            {% endif %}
             <div class="dropdown" id="adminDropdown" style="display:none; right:0; left:auto;">
-                {% if admin_logged_in %}
-                <a href="/logout"><i data-lucide="log-out" style="width:13px;height:13px;"></i>Odjava</a>
-                {% else %}
                 <a href="/login"><i data-lucide="shield" style="width:13px;height:13px;"></i>Admin prijava</a>
                 <a href="/player_login"><i data-lucide="user-round" style="width:13px;height:13px;"></i>Prijava igrača</a>
-                {% endif %}
             </div>
-            </div>
+        </div>
     </div>
 
-
-
-
     <div class="window-body" style="padding:24px;">
-        <p style="margin-bottom:20px; color:var(--text-muted);">Unesite administratorske podatke.</p>
+        <p style="margin-bottom:20px; color:var(--text-muted);">Prijavite se da biste predali ili uredili svoje parove.</p>
 
         {% if error %}
         <div style="background:rgba(255,68,68,0.12); border:1px solid rgba(255,68,68,0.3); border-radius:6px; padding:10px 14px; margin-bottom:16px; color:var(--red); font-size:13px;">
@@ -60,12 +46,12 @@
         <form method="POST">
             <div class="field-row-stacked">
                 <label for="username">Korisničko ime</label>
-                <input type="text" id="username" name="username" placeholder="admin" required>
+                <input type="text" id="username" name="username" placeholder="npr. ana" required autocomplete="username">
             </div>
 
             <div class="field-row-stacked" style="margin-bottom:20px;">
                 <label for="password">Lozinka</label>
-                <input type="password" id="password" name="password" placeholder="••••••••" required>
+                <input type="password" id="password" name="password" placeholder="••••••••" required autocomplete="current-password">
             </div>
 
             <div style="display:flex; justify-content:flex-end; gap:8px;">
@@ -73,6 +59,10 @@
                 <button type="submit">Prijava →</button>
             </div>
         </form>
+
+        <p style="margin-top:18px; font-size:12px; color:var(--text-muted);">
+            Nemate pristupne podatke? Tražite ih od administratora.
+        </p>
     </div>
 </div>
 
@@ -86,8 +76,7 @@
         const dd  = document.getElementById('adminDropdown');
         if (dd && btn && !btn.contains(e.target)) dd.style.display = 'none';
     });
-
-lucide.createIcons();
+    lucide.createIcons();
 </script>
 </body>
 </html>

@@ -7,6 +7,7 @@ import time
 import os
 from urllib.parse import urlparse, parse_qs
 from zoneinfo import ZoneInfo
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"  # Change in production
@@ -71,13 +72,13 @@ def get_eligible_players_for_ticket(ticket_date_str, conn=None):
 
 
 def get_all_players_with_status(conn=None):
-    """Returns list of dicts: {id, name, active, joined_at} for all players."""
+    """Returns list of dicts: {id, name, active, joined_at, username} for all players."""
     close = conn is None
     if close:
         conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT id, name, active, joined_at FROM players ORDER BY id ASC")
-    result = [{"id": r[0], "name": r[1], "active": r[2], "joined_at": r[3]} for r in c.fetchall()]
+    c.execute("SELECT id, name, active, joined_at, username FROM players ORDER BY id ASC")
+    result = [{"id": r[0], "name": r[1], "active": r[2], "joined_at": r[3], "username": r[4]} for r in c.fetchall()]
     if close:
         conn.close()
     return result
@@ -97,7 +98,9 @@ def init_db():
             id        INTEGER PRIMARY KEY AUTOINCREMENT,
             name      TEXT NOT NULL UNIQUE,
             active    INTEGER NOT NULL DEFAULT 1,
-            joined_at TEXT NOT NULL DEFAULT '2000-01-01 00:00'
+            joined_at TEXT NOT NULL DEFAULT '2000-01-01 00:00',
+            username      TEXT UNIQUE,
+            password_hash TEXT
         )
     """)
 
@@ -106,6 +109,10 @@ def init_db():
     player_cols = [r[1] for r in c.fetchall()]
     if "joined_at" not in player_cols:
         c.execute("ALTER TABLE players ADD COLUMN joined_at TEXT NOT NULL DEFAULT '2000-01-01 00:00'")
+    if "username" not in player_cols:
+        c.execute("ALTER TABLE players ADD COLUMN username TEXT")
+    if "password_hash" not in player_cols:
+        c.execute("ALTER TABLE players ADD COLUMN password_hash TEXT")
 
     # Migrate old hardcoded players if table is empty
     c.execute("SELECT COUNT(*) FROM players")
@@ -215,12 +222,38 @@ def init_db():
     c.execute("""CREATE TABLE IF NOT EXISTS pick_slots (
         id INTEGER PRIMARY KEY AUTOINCREMENT, slot_type TEXT NOT NULL,
         week_label TEXT NOT NULL, opens_at TEXT NOT NULL,
-        locks_at TEXT NOT NULL, created_at TEXT NOT NULL)""")
+        locks_at TEXT NOT NULL, created_at TEXT NOT NULL,
+        all_submitted_notified INTEGER NOT NULL DEFAULT 0)""")
     c.execute("""CREATE TABLE IF NOT EXISTS picks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         slot_id INTEGER NOT NULL REFERENCES pick_slots(id),
         player_id INTEGER NOT NULL REFERENCES players(id),
         fixture TEXT NOT NULL, tip TEXT NOT NULL, odds REAL, submitted_at TEXT NOT NULL)""")
+
+    # Migrate: add all_submitted_notified to existing pick_slots tables
+    c.execute("PRAGMA table_info(pick_slots)")
+    slot_cols = [r[1] for r in c.fetchall()]
+    if "all_submitted_notified" not in slot_cols:
+        c.execute("ALTER TABLE pick_slots ADD COLUMN all_submitted_notified INTEGER NOT NULL DEFAULT 0")
+
+    # Pending change requests from players (no login required to submit)
+    c.execute("""CREATE TABLE IF NOT EXISTS pick_change_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pick_id INTEGER REFERENCES picks(id),
+        slot_id INTEGER NOT NULL REFERENCES pick_slots(id),
+        player_id INTEGER NOT NULL REFERENCES players(id),
+        request_type TEXT NOT NULL,      -- 'EDIT' or 'DELETE'
+        new_fixture TEXT, new_tip TEXT, new_odds REAL,
+        reason TEXT,
+        status TEXT NOT NULL DEFAULT 'PENDING',  -- PENDING / APPROVED / DENIED
+        created_at TEXT NOT NULL,
+        resolved_at TEXT)""")
+
+    # FCM device tokens (admin's phone(s))
+    c.execute("""CREATE TABLE IF NOT EXISTS device_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token TEXT NOT NULL UNIQUE,
+        label TEXT, created_at TEXT NOT NULL)""")
 
     conn.commit()
     conn.close()
@@ -593,14 +626,50 @@ def login():
             session["admin_logged_in"] = True
             return redirect("/")
         else:
-            return render_template("login.html", error="Invalid credentials")
-    return render_template("login.html", error=None)
+            return render_template("login.html", error="Invalid credentials",
+                                   current_player_id=session.get("player_logged_in_id"),
+                                   current_player_name=session.get("player_logged_in_name"))
+    return render_template("login.html", error=None,
+                           current_player_id=session.get("player_logged_in_id"),
+                           current_player_name=session.get("player_logged_in_name"))
 
 
 @app.route("/logout")
 def logout():
     session.pop("admin_logged_in", None)
     return redirect("/")
+
+
+@app.route("/player_login", methods=["GET", "POST"])
+def player_login():
+    if request.method == "POST":
+        username = request.form.get("username", "").strip().lower()
+        password = request.form.get("password", "")
+
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute("SELECT id, name, password_hash FROM players WHERE username=? AND active=1", (username,))
+        row = c.fetchone()
+        conn.close()
+
+        if row and row[2] and check_password_hash(row[2], password):
+            session["player_logged_in_id"] = row[0]
+            session["player_logged_in_name"] = row[1]
+            return redirect("/picks")
+        return render_template("player_login.html", error="Neispravno korisničko ime ili lozinka")
+    return render_template("player_login.html", error=None)
+
+
+@app.route("/player_logout")
+def player_logout():
+    session.pop("player_logged_in_id", None)
+    session.pop("player_logged_in_name", None)
+    return redirect("/picks")
+
+
+def current_player_id():
+    """Returns the logged-in player's id, or None if nobody (or admin only) is logged in."""
+    return session.get("player_logged_in_id")
 
 
 # ---------------------------------------------------------------------------
@@ -613,13 +682,24 @@ def add_player():
         return "Unauthorized", 403
 
     name = request.form.get("player_name", "").strip()
+    username = request.form.get("username", "").strip().lower() or None
+    password = request.form.get("password", "").strip() or None
     if not name:
         return redirect("/")
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    pw_hash = generate_password_hash(password) if password else None
 
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
+
+    # Reject duplicate usernames up front (clearer than a raw IntegrityError)
+    if username:
+        c.execute("SELECT id FROM players WHERE username=?", (username,))
+        existing_user = c.fetchone()
+        if existing_user:
+            conn.close()
+            return redirect("/?error=username_taken")
 
     # Check if player already exists (may have been removed before)
     c.execute("SELECT id, active FROM players WHERE name=?", (name,))
@@ -631,14 +711,49 @@ def add_player():
             conn.close()
             return redirect("/")  # already active
         # Reactivate — update joined_at to NOW so they only appear on future tickets
-        c.execute("UPDATE players SET active=1, joined_at=? WHERE id=?", (now, pid))
+        if pw_hash:
+            c.execute("UPDATE players SET active=1, joined_at=?, username=?, password_hash=? WHERE id=?",
+                      (now, username, pw_hash, pid))
+        else:
+            c.execute("UPDATE players SET active=1, joined_at=? WHERE id=?", (now, pid))
     else:
-        c.execute("INSERT INTO players (name, active, joined_at) VALUES (?, 1, ?)", (name, now))
+        c.execute("INSERT INTO players (name, active, joined_at, username, password_hash) VALUES (?, 1, ?, ?, ?)",
+                  (name, now, username, pw_hash))
         pid = c.lastrowid
 
     # Ensure streak rows exist
     c.execute("INSERT OR IGNORE INTO loss_streaks (player, streak) VALUES (?, 0)", (pid,))
     c.execute("INSERT OR IGNORE INTO win_streaks (player, streak, max_streak) VALUES (?, 0, 0)", (pid,))
+
+    conn.commit()
+    conn.close()
+    return redirect("/")
+
+
+@app.route("/set_player_credentials/<int:player_id>", methods=["POST"])
+def set_player_credentials(player_id):
+    """Admin sets/changes a player's username and password at any time."""
+    if not session.get("admin_logged_in"):
+        return "Unauthorized", 403
+
+    username = request.form.get("username", "").strip().lower() or None
+    password = request.form.get("password", "").strip() or None
+
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    if username:
+        c.execute("SELECT id FROM players WHERE username=? AND id!=?", (username, player_id))
+        if c.fetchone():
+            conn.close()
+            return redirect("/?error=username_taken")
+
+    if password:
+        pw_hash = generate_password_hash(password)
+        c.execute("UPDATE players SET username=?, password_hash=? WHERE id=?", (username, pw_hash, player_id))
+    else:
+        # Allow updating username alone without touching the password
+        c.execute("UPDATE players SET username=? WHERE id=?", (username, player_id))
 
     conn.commit()
     conn.close()
@@ -720,6 +835,8 @@ def index():
         periods=periods,
         period_ids=period_ids,
         submit_error=submit_error,
+        current_player_id=session.get("player_logged_in_id"),
+        current_player_name=session.get("player_logged_in_name"),
     )
 
 
@@ -729,7 +846,12 @@ def index():
 
 @app.route("/pravila")
 def pravila():
-    return render_template("pravilaigre.html")
+    return render_template(
+        "pravilaigre.html",
+        admin_logged_in=session.get("admin_logged_in"),
+        current_player_id=session.get("player_logged_in_id"),
+        current_player_name=session.get("player_logged_in_name"),
+    )
 
 
 @app.route("/update")
@@ -1220,6 +1342,8 @@ def leaderboard():
         payment_data=overall_payments,
         period_tabs=period_tabs,
         admin_logged_in=session.get("admin_logged_in"),
+        current_player_id=session.get("player_logged_in_id"),
+        current_player_name=session.get("player_logged_in_name"),
     )
 
 
@@ -1328,6 +1452,8 @@ def player_profile(player_id):
         },
         normalize_result=normalize_result,
         admin_logged_in=session.get("admin_logged_in"),
+        current_player_id=session.get("player_logged_in_id"),
+        current_player_name=session.get("player_logged_in_name"),
     )
 
 
@@ -1335,6 +1461,118 @@ def player_profile(player_id):
 # ---------------------------------------------------------------------------
 # Picks helpers & routes
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Push notifications (Firebase Cloud Messaging)
+# ---------------------------------------------------------------------------
+
+FCM_SERVICE_ACCOUNT_PATH = os.environ.get("FCM_SERVICE_ACCOUNT_PATH", "firebase-service-account.json")
+FCM_PROJECT_ID = os.environ.get("FCM_PROJECT_ID", "")
+
+
+def send_fcm_notification(title, body, data=None):
+    """
+    Sends a push notification to every registered device token.
+    Silently does nothing if Firebase isn't configured (no crash on dev machines).
+    Removes tokens that FCM reports as invalid/unregistered.
+    """
+    if not FCM_PROJECT_ID or not os.path.exists(FCM_SERVICE_ACCOUNT_PATH):
+        print("[FCM] Not configured — skipping notification:", title)
+        return
+
+    try:
+        from google.oauth2 import service_account
+        import google.auth.transport.requests as gareq
+    except ImportError:
+        print("[FCM] google-auth not installed — run: pip install google-auth")
+        return
+
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT id, token FROM device_tokens")
+    tokens = c.fetchall()
+    conn.close()
+    if not tokens:
+        print("[FCM] No registered devices — skipping notification:", title)
+        return
+
+    try:
+        credentials = service_account.Credentials.from_service_account_file(
+            FCM_SERVICE_ACCOUNT_PATH,
+            scopes=["https://www.googleapis.com/auth/firebase.messaging"],
+        )
+        auth_req = gareq.Request()
+        credentials.refresh(auth_req)
+        access_token = credentials.token
+    except Exception as e:
+        print("[FCM] Auth failed:", e)
+        return
+
+    url = f"https://fcm.googleapis.com/v1/projects/{FCM_PROJECT_ID}/messages:send"
+    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+
+    dead_token_ids = []
+    for token_id, token in tokens:
+        payload = {
+            "message": {
+                "token": token,
+                "notification": {"title": title, "body": body},
+                "data": {k: str(v) for k, v in (data or {}).items()},
+            }
+        }
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=10)
+            if resp.status_code == 404 or (resp.status_code == 400 and "UNREGISTERED" in resp.text):
+                dead_token_ids.append(token_id)
+        except Exception as e:
+            print("[FCM] Send failed for a token:", e)
+
+    if dead_token_ids:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.executemany("DELETE FROM device_tokens WHERE id=?", [(tid,) for tid in dead_token_ids])
+        conn.commit()
+        conn.close()
+
+
+def check_and_notify_all_submitted(slot_id):
+    """
+    If every active player has submitted >=1 pick for this slot and we haven't
+    already notified for it, send a push notification and mark it as sent.
+    """
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    c.execute("SELECT week_label, all_submitted_notified FROM pick_slots WHERE id=?", (slot_id,))
+    row = c.fetchone()
+    if not row or row[1]:
+        conn.close()
+        return
+    week_label = row[0]
+
+    active_names = get_active_player_names(conn)
+    active_ids = set(active_names.keys())
+    if not active_ids:
+        conn.close()
+        return
+
+    c.execute("SELECT DISTINCT player_id FROM picks WHERE slot_id=?", (slot_id,))
+    submitted_ids = {r[0] for r in c.fetchall()}
+
+    if active_ids.issubset(submitted_ids):
+        c.execute("UPDATE pick_slots SET all_submitted_notified=1 WHERE id=?", (slot_id,))
+        conn.commit()
+        conn.close()
+        label = "Radni tjedan" if "weekday" in week_label else "Vikend"
+        send_fcm_notification(
+            title="Svi su predali parove! ✅",
+            body=f"{label} ({week_label.split('-W')[1].split('-')[0]}. tjedan) — svi igrači su prijavili svoje parove.",
+            data={"type": "all_submitted", "slot_id": slot_id, "week_label": week_label},
+        )
+    else:
+        conn.close()
+
 
 def get_current_slot_info():
     from datetime import datetime, timedelta
@@ -1345,7 +1583,7 @@ def get_current_slot_info():
     else:
         next_monday = (now - timedelta(days=weekday)).replace(hour=0, minute=0, second=0, microsecond=0)
     weekday_opens = next_monday - timedelta(days=1)
-    weekday_locks = next_monday + timedelta(hours=15)
+    weekday_locks = next_monday + timedelta(hours=12)
     weekend_opens = next_monday + timedelta(days=2)
     weekend_locks = next_monday + timedelta(days=4, hours=12)
     iso_year, iso_week, _ = next_monday.isocalendar()
@@ -1426,14 +1664,29 @@ def picks():
                         "locks_at": hs[3], "player_count": hs[4], "pick_count": hs[5], "by_player": by_player})
     conn.close()
     return render_template("picks.html", slots=slot_data, history=history,
-                           player_names=player_names, admin_logged_in=session.get("admin_logged_in"))
+                           player_names=player_names, admin_logged_in=session.get("admin_logged_in"),
+                           current_player_id=session.get("player_logged_in_id"),
+                           current_player_name=session.get("player_logged_in_name"))
 
 
 @app.route("/picks/submit", methods=["POST"])
 def picks_submit():
     from datetime import datetime
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-    player_id = request.form.get("player_id", type=int)
+
+    is_admin = session.get("admin_logged_in")
+    logged_in_player = current_player_id()
+
+    # A logged-in player can only ever submit on their own behalf.
+    # Admin can submit on behalf of anyone (form picks the player).
+    # If neither is logged in, reject — picks now require an account.
+    if is_admin:
+        player_id = request.form.get("player_id", type=int)
+    elif logged_in_player:
+        player_id = logged_in_player
+    else:
+        return redirect("/player_login")
+
     slot_id   = request.form.get("slot_id", type=int)
     fixture   = request.form.get("fixture", "").strip()
     tip       = request.form.get("tip", "").strip()
@@ -1458,15 +1711,84 @@ def picks_submit():
               (slot_id, player_id, fixture, tip, odds, now_str))
     conn.commit()
     conn.close()
+    check_and_notify_all_submitted(slot_id)
+    return redirect("/picks")
+
+
+@app.route("/picks/edit/<int:pick_id>", methods=["POST"])
+def picks_edit(pick_id):
+    """A player edits their own pick directly (admin can edit any pick)."""
+    from datetime import datetime
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    is_admin = session.get("admin_logged_in")
+    logged_in_player = current_player_id()
+    if not is_admin and not logged_in_player:
+        return redirect("/player_login")
+
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT player_id, slot_id FROM picks WHERE id=?", (pick_id,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return redirect("/picks")
+    owner_id, slot_id = row
+
+    if not is_admin and owner_id != logged_in_player:
+        conn.close()
+        return "Unauthorized", 403
+
+    c.execute("SELECT locks_at FROM pick_slots WHERE id=?", (slot_id,))
+    lock_row = c.fetchone()
+    if not is_admin and (not lock_row or now_str >= lock_row[0]):
+        conn.close()
+        return redirect("/picks?error=locked")
+
+    fixture = request.form.get("fixture", "").strip()
+    tip     = request.form.get("tip", "").strip()
+    try:
+        odds = float(request.form.get("odds", "")) if request.form.get("odds") else None
+    except ValueError:
+        odds = None
+    if not fixture or not tip:
+        conn.close()
+        return redirect("/picks")
+
+    c.execute("UPDATE picks SET fixture=?, tip=?, odds=? WHERE id=?", (fixture, tip, odds, pick_id))
+    conn.commit()
+    conn.close()
     return redirect("/picks")
 
 
 @app.route("/picks/delete/<int:pick_id>", methods=["POST"])
 def picks_delete(pick_id):
-    if not session.get("admin_logged_in"):
+    is_admin = session.get("admin_logged_in")
+    logged_in_player = current_player_id()
+    if not is_admin and not logged_in_player:
         return "Unauthorized", 403
+
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
+
+    if not is_admin:
+        # Players may only delete their own pick, and only while the slot is open.
+        from datetime import datetime
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+        c.execute("""SELECT p.player_id, ps.locks_at FROM picks p
+                     JOIN pick_slots ps ON ps.id = p.slot_id WHERE p.id=?""", (pick_id,))
+        row = c.fetchone()
+        if not row:
+            conn.close()
+            return redirect("/picks")
+        owner_id, locks_at = row
+        if owner_id != logged_in_player:
+            conn.close()
+            return "Unauthorized", 403
+        if now_str >= locks_at:
+            conn.close()
+            return redirect("/picks?error=locked")
+
     c.execute("DELETE FROM picks WHERE id=?", (pick_id,))
     conn.commit()
     conn.close()
@@ -1514,6 +1836,270 @@ def edit_ticket(ticket_id):
     return render_template("edit_ticket.html", ticket=ticket, legs=legs,
                            player_names=player_names, admin_logged_in=True,
                            error=error, success=success)
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# JSON API for Flutter admin app
+# ---------------------------------------------------------------------------
+# Auth: every request (except /api/picks/change-request, which is public so
+# players can use it without logging in) must include header:
+#   X-Api-Key: <APP_API_KEY>
+# Set APP_API_KEY as an environment variable on your server.
+
+APP_API_KEY = os.environ.get("APP_API_KEY", "")
+
+
+def require_api_key():
+    if not APP_API_KEY:
+        return jsonify({"error": "Server API key not configured"}), 500
+    key = request.headers.get("X-Api-Key", "")
+    if key != APP_API_KEY:
+        return jsonify({"error": "Invalid API key"}), 401
+    return None
+
+
+@app.route("/api/picks/status")
+def api_picks_status():
+    auth_err = require_api_key()
+    if auth_err:
+        return auth_err
+
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    active_names = get_active_player_names(conn)
+    slots = get_current_slot_info()
+    slot_ids = ensure_slots_exist(c, slots, datetime.now().strftime("%Y-%m-%d %H:%M"))
+    conn.commit()
+
+    result = []
+    for s in slots:
+        sid = slot_ids[s["slot_type"]]
+        c.execute("SELECT DISTINCT player_id FROM picks WHERE slot_id=?", (sid,))
+        submitted = {r[0] for r in c.fetchall()}
+        missing = [{"id": pid, "name": name} for pid, name in active_names.items() if pid not in submitted]
+        submitted_list = [{"id": pid, "name": name} for pid, name in active_names.items() if pid in submitted]
+        result.append({
+            "slot_id": sid,
+            "slot_type": s["slot_type"],
+            "label": s["label"],
+            "week_label": s["week_label"],
+            "opens_at": s["opens_at"],
+            "locks_at": s["locks_at"],
+            "is_open": s["is_open"],
+            "is_locked": s["is_locked"],
+            "submitted": submitted_list,
+            "missing": missing,
+            "all_submitted": len(missing) == 0,
+        })
+    conn.close()
+    return jsonify({"slots": result})
+
+
+@app.route("/api/picks/<int:slot_id>")
+def api_picks_for_slot(slot_id):
+    auth_err = require_api_key()
+    if auth_err:
+        return auth_err
+
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("""SELECT p.id, p.player_id, pl.name, p.fixture, p.tip, p.odds, p.submitted_at
+                 FROM picks p JOIN players pl ON pl.id=p.player_id
+                 WHERE p.slot_id=? ORDER BY p.submitted_at ASC""", (slot_id,))
+    picks_list = [
+        {"id": r[0], "player_id": r[1], "player_name": r[2], "fixture": r[3],
+         "tip": r[4], "odds": r[5], "submitted_at": r[6]}
+        for r in c.fetchall()
+    ]
+    conn.close()
+    return jsonify({"picks": picks_list})
+
+
+@app.route("/api/change-requests")
+def api_change_requests():
+    """Admin views pending (and optionally all) change requests."""
+    auth_err = require_api_key()
+    if auth_err:
+        return auth_err
+
+    status_filter = request.args.get("status", "PENDING")
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    if status_filter == "ALL":
+        c.execute("""SELECT r.id, r.pick_id, r.slot_id, r.player_id, pl.name, r.request_type,
+                            r.new_fixture, r.new_tip, r.new_odds, r.reason, r.status,
+                            r.created_at, r.resolved_at,
+                            p.fixture, p.tip, p.odds
+                     FROM pick_change_requests r
+                     JOIN players pl ON pl.id = r.player_id
+                     LEFT JOIN picks p ON p.id = r.pick_id
+                     ORDER BY r.created_at DESC""")
+    else:
+        c.execute("""SELECT r.id, r.pick_id, r.slot_id, r.player_id, pl.name, r.request_type,
+                            r.new_fixture, r.new_tip, r.new_odds, r.reason, r.status,
+                            r.created_at, r.resolved_at,
+                            p.fixture, p.tip, p.odds
+                     FROM pick_change_requests r
+                     JOIN players pl ON pl.id = r.player_id
+                     LEFT JOIN picks p ON p.id = r.pick_id
+                     WHERE r.status=?
+                     ORDER BY r.created_at DESC""", (status_filter,))
+    rows = c.fetchall()
+    conn.close()
+
+    requests_list = []
+    for r in rows:
+        requests_list.append({
+            "id": r[0], "pick_id": r[1], "slot_id": r[2], "player_id": r[3], "player_name": r[4],
+            "request_type": r[5], "new_fixture": r[6], "new_tip": r[7], "new_odds": r[8],
+            "reason": r[9], "status": r[10], "created_at": r[11], "resolved_at": r[12],
+            "current_fixture": r[13], "current_tip": r[14], "current_odds": r[15],
+        })
+    return jsonify({"requests": requests_list})
+
+
+@app.route("/api/change-requests/<int:req_id>/approve", methods=["POST"])
+def api_approve_change_request(req_id):
+    auth_err = require_api_key()
+    if auth_err:
+        return auth_err
+
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT pick_id, request_type, new_fixture, new_tip, new_odds, status FROM pick_change_requests WHERE id=?", (req_id,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Request not found"}), 404
+    if row[5] != "PENDING":
+        conn.close()
+        return jsonify({"error": "Request already resolved"}), 400
+
+    pick_id, req_type, new_fixture, new_tip, new_odds, _ = row
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    if req_type == "DELETE":
+        if pick_id:
+            c.execute("DELETE FROM picks WHERE id=?", (pick_id,))
+    else:  # EDIT
+        if pick_id:
+            c.execute("UPDATE picks SET fixture=?, tip=?, odds=? WHERE id=?",
+                      (new_fixture, new_tip, new_odds, pick_id))
+
+    c.execute("UPDATE pick_change_requests SET status='APPROVED', resolved_at=? WHERE id=?", (now_str, req_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/change-requests/<int:req_id>/deny", methods=["POST"])
+def api_deny_change_request(req_id):
+    auth_err = require_api_key()
+    if auth_err:
+        return auth_err
+
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT status FROM pick_change_requests WHERE id=?", (req_id,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Request not found"}), 404
+    if row[0] != "PENDING":
+        conn.close()
+        return jsonify({"error": "Request already resolved"}), 400
+    c.execute("UPDATE pick_change_requests SET status='DENIED', resolved_at=? WHERE id=?", (now_str, req_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/device/register", methods=["POST"])
+def api_register_device():
+    """Flutter app calls this once it has an FCM token, to register for notifications."""
+    auth_err = require_api_key()
+    if auth_err:
+        return auth_err
+
+    data = request.get_json(silent=True) or {}
+    token = data.get("token", "").strip()
+    label = data.get("label", "").strip() or None
+    if not token:
+        return jsonify({"error": "token required"}), 400
+
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("INSERT OR IGNORE INTO device_tokens (token, label, created_at) VALUES (?,?,?)",
+              (token, label, now_str))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/leaderboard")
+def api_leaderboard():
+    """Read-only leaderboard snapshot for the Flutter app's home screen."""
+    auth_err = require_api_key()
+    if auth_err:
+        return auth_err
+
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    player_names = get_player_names(conn)
+    c.execute("SELECT ticket_id FROM tickets WHERE ticket_result NOT IN ('PENDING','UNKNOWN') ORDER BY id ASC")
+    tids = [r[0] for r in c.fetchall()]
+    data, payments = compute_leaderboard_stats(c, player_names, tids)
+    conn.close()
+    return jsonify({"leaderboard": data, "payments": payments})
+
+
+# ---------------------------------------------------------------------------
+# Public: player change-request submission (no API key — used from a simple
+# web form or directly from any device; rate-limited by being write-only and
+# always landing in PENDING for admin review)
+# ---------------------------------------------------------------------------
+
+@app.route("/picks/change-request", methods=["POST"])
+def picks_change_request():
+    pick_id      = request.form.get("pick_id", type=int)
+    slot_id      = request.form.get("slot_id", type=int)
+    player_id    = request.form.get("player_id", type=int)
+    request_type = request.form.get("request_type", "EDIT")
+    new_fixture  = request.form.get("new_fixture", "").strip() or None
+    new_tip      = request.form.get("new_tip", "").strip() or None
+    new_odds_raw = request.form.get("new_odds", "").strip()
+    reason       = request.form.get("reason", "").strip() or None
+    try:
+        new_odds = float(new_odds_raw) if new_odds_raw else None
+    except ValueError:
+        new_odds = None
+
+    if not slot_id or not player_id or request_type not in ("EDIT", "DELETE"):
+        return redirect("/picks?error=badrequest")
+
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("""INSERT INTO pick_change_requests
+                 (pick_id, slot_id, player_id, request_type, new_fixture, new_tip, new_odds, reason, status, created_at)
+                 VALUES (?,?,?,?,?,?,?,?, 'PENDING', ?)""",
+              (pick_id, slot_id, player_id, request_type, new_fixture, new_tip, new_odds, reason, now_str))
+    conn.commit()
+    conn.close()
+
+    send_fcm_notification(
+        title="Zahtjev za izmjenu para",
+        body=f"Igrač traži {'brisanje' if request_type == 'DELETE' else 'izmjenu'} para.",
+        data={"type": "change_request", "slot_id": slot_id},
+    )
+    return redirect("/picks?success=request_sent")
 
 
 # ---------------------------------------------------------------------------
