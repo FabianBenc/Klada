@@ -61,18 +61,11 @@
         <!-- Right side: Admin -->
         <div class="menu-item" @click="openMenu = openMenu === 'admin' ? null : 'admin'"
              style="margin-left:auto;">
-            <span x-show="!admin_logged_in && !player_logged_in"><i data-lucide="log-in" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Login</span>
+            <span x-show="!admin_logged_in"><i data-lucide="log-in" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Login</span>
             <span x-show="admin_logged_in" style="color:var(--green);"><i data-lucide="shield-check" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Admin ▾</span>
-            <span x-show="!admin_logged_in && player_logged_in" style="color:var(--accent);"><i data-lucide="user-round-check" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i><span x-text="player_logged_in_name"></span> ▾</span>
             <div class="dropdown" x-show="openMenu === 'admin'" style="right:0; left:auto;">
-                <template x-if="!admin_logged_in && !player_logged_in">
-                    <div>
-                        <a @click.prevent="loginModal=true; openMenu=null" href="#"><i data-lucide="shield" style="width:13px;height:13px;"></i>Admin prijava</a>
-                        <a href="/player_login"><i data-lucide="user-round" style="width:13px;height:13px;"></i>Prijava igrača</a>
-                    </div>
-                </template>
+                <a x-show="!admin_logged_in" @click.prevent="loginModal=true; openMenu=null" href="#"><i data-lucide="log-in" style="width:13px;height:13px;"></i>Prijava</a>
                 <a x-show="admin_logged_in" href="/logout"><i data-lucide="log-out" style="width:13px;height:13px;"></i>Odjava</a>
-                <a x-show="!admin_logged_in && player_logged_in" href="/player_logout"><i data-lucide="log-out" style="width:13px;height:13px;"></i>Odjava</a>
                 <template x-if="admin_logged_in">
                     <span style="padding:10px 16px; color:var(--green); font-size:12px; display:block; font-weight:600; border-top:1px solid var(--border);">
                         <i data-lucide="check-circle" style="width:12px;height:12px;margin-right:4px;vertical-align:middle;"></i>Prijavljen kao admin
@@ -132,29 +125,15 @@
             <!-- Current players list -->
             <div style="margin-bottom:14px;">
                 <p style="font-size:12px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.8px; margin-bottom:8px;">Aktivni igrači (sljedeći tiket)</p>
-                <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:10px;">
+                <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
                     {% for player in all_players %}
                     {% if player.active %}
-                    <div style="display:flex; align-items:center; gap:10px; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:8px 12px; flex-wrap:wrap;">
-                        <div style="min-width:110px;">
+                    <div style="display:flex; align-items:center; gap:6px; background:var(--surface2); border:1px solid var(--border); border-radius:20px; padding:4px 10px 4px 12px;">
+                        <div>
                             <span style="font-size:13px; font-weight:500; color:var(--green);">{{ player.name }}</span>
                             <span style="font-size:10px; color:var(--text-muted); display:block; line-height:1.2;">od {{ player.joined_at[:10] }}</span>
                         </div>
-                        <form method="POST" action="/set_player_credentials/{{ player.id }}"
-                              style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; flex:1;">
-                            <input type="text" name="username" placeholder="korisničko ime"
-                                   value="{{ player.username or '' }}"
-                                   style="flex:1; min-width:100px; font-size:12px; padding:5px 8px !important;">
-                            <input type="password" name="password" placeholder="{% if player.username %}nova lozinka{% else %}lozinka{% endif %}"
-                                   style="flex:1; min-width:100px; font-size:12px; padding:5px 8px !important;">
-                            <button type="submit" style="font-size:11px; padding:5px 10px;">Spremi</button>
-                            {% if player.username %}
-                            <span style="font-size:10px; color:var(--accent); white-space:nowrap;">
-                                <i data-lucide="check-circle" style="width:11px;height:11px;vertical-align:middle;"></i> ima pristup
-                            </span>
-                            {% endif %}
-                        </form>
-                        <form method="POST" action="/remove_player/{{ player.id }}" onsubmit="return confirm('Ukloniti {{ player.name }}? Svi prethodni tiketi ostaju netaknuti.')">
+                        <form method="POST" action="/remove_player/{{ player.id }}" style="display:inline;" onsubmit="return confirm('Ukloniti {{ player.name }}? Svi prethodni tiketi ostaju netaknuti.')">
                             <button type="submit" style="background:transparent !important; border:none !important; color:var(--red); font-size:14px; padding:0 2px; line-height:1; cursor:pointer; box-shadow:none !important; min-width:0;">✕</button>
                         </form>
                     </div>
@@ -179,26 +158,14 @@
                 {% endif %}
             </div>
 
-            {% if request.args.get('error') == 'username_taken' %}
-            <div style="background:rgba(229,115,115,0.12); border:1px solid rgba(229,115,115,0.3); border-radius:6px;
-                        padding:8px 12px; margin-bottom:10px; color:var(--red); font-size:12px;">
-                ⚠ To korisničko ime je već zauzeto.
-            </div>
-            {% endif %}
-
             <!-- Add new player -->
             <form method="POST" action="/add_player" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; border-top:1px solid var(--border); padding-top:12px;">
                 <input type="text" name="player_name" placeholder="Ime novog igrača" required
-                       style="flex:1; min-width:140px;">
-                <input type="text" name="username" placeholder="korisničko ime (opcionalno)"
-                       style="flex:1; min-width:140px;">
-                <input type="password" name="password" placeholder="lozinka (opcionalno)"
-                       style="flex:1; min-width:120px;">
+                       style="flex:1; min-width:160px;">
                 <button type="submit" style="white-space:nowrap; background:var(--green) !important; color:#000 !important;">+ Dodaj igrača</button>
             </form>
             <p style="margin-top:8px; font-size:11px; color:var(--text-muted);">
                 ℹ Novi igrač plaća €1 za sebe pri prvom tiketu na kojemu sudjeluje. Datum dodavanja određuje od kojeg tiketa igrač sudjeluje — tiketi odigrani <em>prije</em> tog datuma automatski ga isključuju, čak i pri ponovnom uvozu tiketa.
-                Korisničko ime i lozinka su opcionalni — bez njih igrač ne može sam predati parove na stranici Parovi, ali admin može u njegovo ime.
             </p>
         </div>
     </div>
@@ -639,7 +606,10 @@
                                 <tr>
                                     <td>
                                         <select name="bet_player_{{ bet[5] }}">
-                                            {% for pid, pname in player_names.items() %}
+                                            {% if bet[1] not in active_player_names %}
+                                            <option value="{{ bet[1] }}" selected disabled>{{ player_names.get(bet[1], 'Nepoznat') }} (neaktivan)</option>
+                                            {% endif %}
+                                            {% for pid, pname in active_player_names.items() %}
                                             <option value="{{ pid }}" {% if pid == bet[1] %}selected{% endif %}>{{ pname }}</option>
                                             {% endfor %}
                                         </select>
@@ -715,8 +685,6 @@ function ticketApp() {
         loginModal: false,
         playersOpen: false,
         admin_logged_in: {{ 'true' if admin_logged_in else 'false' }},
-        player_logged_in: {{ 'true' if current_player_id else 'false' }},
-        player_logged_in_name: {{ (current_player_name or '') | tojson }},
 
         filterTicket(text, status) {
             let searchMatch = true;

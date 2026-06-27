@@ -890,7 +890,10 @@ def reassign_legs(ticket_id):
     if not session.get("admin_logged_in"):
         return "Unauthorized", 403
 
-    PLAYER_NAMES = get_player_names()
+    # Only active players may be assigned a leg — an inactive player should
+    # never end up back in ticket_players/bets just because someone picked
+    # them from a dropdown that still listed their name.
+    ACTIVE_PLAYER_NAMES = get_active_player_names()
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
@@ -902,15 +905,17 @@ def reassign_legs(ticket_id):
                 bet_id = int(bet_id)
             except ValueError:
                 continue
-            if new_player in PLAYER_NAMES:
+            if new_player in ACTIVE_PLAYER_NAMES:
                 c.execute("UPDATE bets SET player=? WHERE id=? AND ticket_id=?",
                           (new_player, bet_id, ticket_id))
 
     # Re-sync ticket_players to match the actual (post-reassignment) bets,
     # so Ulaganja/payment calculations always reflect who really has legs
     # on this ticket — not a stale snapshot from before the reassignment.
+    # Inactive players are never written into ticket_players, even if an
+    # old bets row still points at one from before this safeguard existed.
     c.execute("SELECT DISTINCT player FROM bets WHERE ticket_id=?", (ticket_id,))
-    actual_pids = {r[0] for r in c.fetchall() if r[0] is not None}
+    actual_pids = {r[0] for r in c.fetchall() if r[0] is not None and r[0] in ACTIVE_PLAYER_NAMES}
     c.execute("DELETE FROM ticket_players WHERE ticket_id=?", (ticket_id,))
     for pid in actual_pids:
         c.execute("INSERT INTO ticket_players (ticket_id, player_id) VALUES (?, ?)", (ticket_id, pid))
@@ -1236,7 +1241,7 @@ def manual_ticket():
         return redirect("/login")
 
     conn = sqlite3.connect(DB_NAME)
-    player_names = get_player_names(conn)
+    player_names = get_active_player_names(conn)
     conn.close()
 
     error = None
@@ -1264,6 +1269,7 @@ def manual_ticket():
 
             conn = sqlite3.connect(DB_NAME)
             c = conn.cursor()
+            active_pids = set(get_active_player_names(conn).keys())
 
             # Assign to period
             period_id = None
@@ -1278,11 +1284,13 @@ def manual_ticket():
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (ticket_id, ticket_id, created_at, now, None, ticket_result, payout, period_id))
 
-            # Ticket players — union of all assigned players
+            # Ticket players — union of all assigned players, active only
             assigned_pids = set()
             for p in players:
                 try:
-                    assigned_pids.add(int(p))
+                    pid = int(p)
+                    if pid in active_pids:
+                        assigned_pids.add(pid)
                 except (ValueError, TypeError):
                     pass
             for pid in assigned_pids:
@@ -1294,9 +1302,11 @@ def manual_ticket():
                 if not fixture:
                     continue
                 try:
-                    pid = int(players[i]) if i < len(players) and players[i] else None
+                    raw_pid = int(players[i]) if i < len(players) and players[i] else None
                 except (ValueError, TypeError):
-                    pid = None
+                    raw_pid = None
+                # Never attach a leg to an inactive (or unknown) player
+                pid = raw_pid if raw_pid in active_pids else None
                 tip   = tips[i].strip() if i < len(tips) else ""
                 try:
                     odds  = float(odds_list[i]) if i < len(odds_list) and odds_list[i] else None
