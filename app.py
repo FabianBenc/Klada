@@ -222,19 +222,12 @@ def init_db():
     c.execute("""CREATE TABLE IF NOT EXISTS pick_slots (
         id INTEGER PRIMARY KEY AUTOINCREMENT, slot_type TEXT NOT NULL,
         week_label TEXT NOT NULL, opens_at TEXT NOT NULL,
-        locks_at TEXT NOT NULL, created_at TEXT NOT NULL,
-        all_submitted_notified INTEGER NOT NULL DEFAULT 0)""")
+        locks_at TEXT NOT NULL, created_at TEXT NOT NULL)""")
     c.execute("""CREATE TABLE IF NOT EXISTS picks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         slot_id INTEGER NOT NULL REFERENCES pick_slots(id),
         player_id INTEGER NOT NULL REFERENCES players(id),
         fixture TEXT NOT NULL, tip TEXT NOT NULL, odds REAL, submitted_at TEXT NOT NULL)""")
-
-    # Migrate: add all_submitted_notified to existing pick_slots tables
-    c.execute("PRAGMA table_info(pick_slots)")
-    slot_cols = [r[1] for r in c.fetchall()]
-    if "all_submitted_notified" not in slot_cols:
-        c.execute("ALTER TABLE pick_slots ADD COLUMN all_submitted_notified INTEGER NOT NULL DEFAULT 0")
 
     # Pending change requests from players (no login required to submit)
     c.execute("""CREATE TABLE IF NOT EXISTS pick_change_requests (
@@ -248,12 +241,6 @@ def init_db():
         status TEXT NOT NULL DEFAULT 'PENDING',  -- PENDING / APPROVED / DENIED
         created_at TEXT NOT NULL,
         resolved_at TEXT)""")
-
-    # FCM device tokens (admin's phone(s))
-    c.execute("""CREATE TABLE IF NOT EXISTS device_tokens (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        token TEXT NOT NULL UNIQUE,
-        label TEXT, created_at TEXT NOT NULL)""")
 
     conn.commit()
     conn.close()
@@ -862,6 +849,42 @@ def update():
     return redirect("/")
 
 
+@app.route("/repair_ticket_players")
+def repair_ticket_players():
+    """
+    One-time maintenance: resyncs ticket_players for every ticket to match
+    the actual players in `bets`. Fixes stale snapshots left over from
+    leg reassignments made before ticket_players auto-sync was added.
+    Safe to run multiple times.
+    """
+    if not session.get("admin_logged_in"):
+        return redirect("/")
+
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    c.execute("SELECT DISTINCT ticket_id FROM bets")
+    all_ticket_ids = [r[0] for r in c.fetchall()]
+
+    fixed = 0
+    for tid in all_ticket_ids:
+        c.execute("SELECT DISTINCT player FROM bets WHERE ticket_id=?", (tid,))
+        actual_pids = {r[0] for r in c.fetchall() if r[0] is not None}
+
+        c.execute("SELECT player_id FROM ticket_players WHERE ticket_id=?", (tid,))
+        current_pids = {r[0] for r in c.fetchall()}
+
+        if actual_pids != current_pids:
+            c.execute("DELETE FROM ticket_players WHERE ticket_id=?", (tid,))
+            for pid in actual_pids:
+                c.execute("INSERT INTO ticket_players (ticket_id, player_id) VALUES (?, ?)", (tid, pid))
+            fixed += 1
+
+    conn.commit()
+    conn.close()
+    return f"Repair complete. Resynced {fixed} of {len(all_ticket_ids)} tickets. <a href='/leaderboard'>View leaderboard</a>"
+
+
 @app.route("/reassign_legs/<ticket_id>", methods=["POST"])
 def reassign_legs(ticket_id):
     if not session.get("admin_logged_in"):
@@ -882,6 +905,15 @@ def reassign_legs(ticket_id):
             if new_player in PLAYER_NAMES:
                 c.execute("UPDATE bets SET player=? WHERE id=? AND ticket_id=?",
                           (new_player, bet_id, ticket_id))
+
+    # Re-sync ticket_players to match the actual (post-reassignment) bets,
+    # so Ulaganja/payment calculations always reflect who really has legs
+    # on this ticket — not a stale snapshot from before the reassignment.
+    c.execute("SELECT DISTINCT player FROM bets WHERE ticket_id=?", (ticket_id,))
+    actual_pids = {r[0] for r in c.fetchall() if r[0] is not None}
+    c.execute("DELETE FROM ticket_players WHERE ticket_id=?", (ticket_id,))
+    for pid in actual_pids:
+        c.execute("INSERT INTO ticket_players (ticket_id, player_id) VALUES (?, ?)", (ticket_id, pid))
 
     conn.commit()
     conn.close()
@@ -1463,117 +1495,6 @@ def player_profile(player_id):
 # ---------------------------------------------------------------------------
 
 
-# ---------------------------------------------------------------------------
-# Push notifications (Firebase Cloud Messaging)
-# ---------------------------------------------------------------------------
-
-FCM_SERVICE_ACCOUNT_PATH = os.environ.get("FCM_SERVICE_ACCOUNT_PATH", "firebase-service-account.json")
-FCM_PROJECT_ID = os.environ.get("FCM_PROJECT_ID", "")
-
-
-def send_fcm_notification(title, body, data=None):
-    """
-    Sends a push notification to every registered device token.
-    Silently does nothing if Firebase isn't configured (no crash on dev machines).
-    Removes tokens that FCM reports as invalid/unregistered.
-    """
-    if not FCM_PROJECT_ID or not os.path.exists(FCM_SERVICE_ACCOUNT_PATH):
-        print("[FCM] Not configured — skipping notification:", title)
-        return
-
-    try:
-        from google.oauth2 import service_account
-        import google.auth.transport.requests as gareq
-    except ImportError:
-        print("[FCM] google-auth not installed — run: pip install google-auth")
-        return
-
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("SELECT id, token FROM device_tokens")
-    tokens = c.fetchall()
-    conn.close()
-    if not tokens:
-        print("[FCM] No registered devices — skipping notification:", title)
-        return
-
-    try:
-        credentials = service_account.Credentials.from_service_account_file(
-            FCM_SERVICE_ACCOUNT_PATH,
-            scopes=["https://www.googleapis.com/auth/firebase.messaging"],
-        )
-        auth_req = gareq.Request()
-        credentials.refresh(auth_req)
-        access_token = credentials.token
-    except Exception as e:
-        print("[FCM] Auth failed:", e)
-        return
-
-    url = f"https://fcm.googleapis.com/v1/projects/{FCM_PROJECT_ID}/messages:send"
-    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
-
-    dead_token_ids = []
-    for token_id, token in tokens:
-        payload = {
-            "message": {
-                "token": token,
-                "notification": {"title": title, "body": body},
-                "data": {k: str(v) for k, v in (data or {}).items()},
-            }
-        }
-        try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=10)
-            if resp.status_code == 404 or (resp.status_code == 400 and "UNREGISTERED" in resp.text):
-                dead_token_ids.append(token_id)
-        except Exception as e:
-            print("[FCM] Send failed for a token:", e)
-
-    if dead_token_ids:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.executemany("DELETE FROM device_tokens WHERE id=?", [(tid,) for tid in dead_token_ids])
-        conn.commit()
-        conn.close()
-
-
-def check_and_notify_all_submitted(slot_id):
-    """
-    If every active player has submitted >=1 pick for this slot and we haven't
-    already notified for it, send a push notification and mark it as sent.
-    """
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-
-    c.execute("SELECT week_label, all_submitted_notified FROM pick_slots WHERE id=?", (slot_id,))
-    row = c.fetchone()
-    if not row or row[1]:
-        conn.close()
-        return
-    week_label = row[0]
-
-    active_names = get_active_player_names(conn)
-    active_ids = set(active_names.keys())
-    if not active_ids:
-        conn.close()
-        return
-
-    c.execute("SELECT DISTINCT player_id FROM picks WHERE slot_id=?", (slot_id,))
-    submitted_ids = {r[0] for r in c.fetchall()}
-
-    if active_ids.issubset(submitted_ids):
-        c.execute("UPDATE pick_slots SET all_submitted_notified=1 WHERE id=?", (slot_id,))
-        conn.commit()
-        conn.close()
-        label = "Radni tjedan" if "weekday" in week_label else "Vikend"
-        send_fcm_notification(
-            title="Svi su predali parove! ✅",
-            body=f"{label} ({week_label.split('-W')[1].split('-')[0]}. tjedan) — svi igrači su prijavili svoje parove.",
-            data={"type": "all_submitted", "slot_id": slot_id, "week_label": week_label},
-        )
-    else:
-        conn.close()
-
-
 def get_current_slot_info():
     from datetime import datetime, timedelta
     now = datetime.now()
@@ -1711,7 +1632,6 @@ def picks_submit():
               (slot_id, player_id, fixture, tip, odds, now_str))
     conn.commit()
     conn.close()
-    check_and_notify_all_submitted(slot_id)
     return redirect("/picks")
 
 
@@ -2020,29 +1940,6 @@ def api_deny_change_request(req_id):
     return jsonify({"ok": True})
 
 
-@app.route("/api/device/register", methods=["POST"])
-def api_register_device():
-    """Flutter app calls this once it has an FCM token, to register for notifications."""
-    auth_err = require_api_key()
-    if auth_err:
-        return auth_err
-
-    data = request.get_json(silent=True) or {}
-    token = data.get("token", "").strip()
-    label = data.get("label", "").strip() or None
-    if not token:
-        return jsonify({"error": "token required"}), 400
-
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("INSERT OR IGNORE INTO device_tokens (token, label, created_at) VALUES (?,?,?)",
-              (token, label, now_str))
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-
 @app.route("/api/leaderboard")
 def api_leaderboard():
     """Read-only leaderboard snapshot for the Flutter app's home screen."""
@@ -2093,12 +1990,6 @@ def picks_change_request():
               (pick_id, slot_id, player_id, request_type, new_fixture, new_tip, new_odds, reason, now_str))
     conn.commit()
     conn.close()
-
-    send_fcm_notification(
-        title="Zahtjev za izmjenu para",
-        body=f"Igrač traži {'brisanje' if request_type == 'DELETE' else 'izmjenu'} para.",
-        data={"type": "change_request", "slot_id": slot_id},
-    )
     return redirect("/picks?success=request_sent")
 
 

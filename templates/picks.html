@@ -246,13 +246,6 @@
             Ovaj igrač je već prijavio 2 para — maksimum dostignut.
         </div>
         {% endif %}
-        {% if request.args.get('success') == 'request_sent' %}
-        <div style="background:rgba(0,173,181,0.1); border:1px solid rgba(0,173,181,0.3); border-radius:6px;
-                    padding:10px 14px; margin-bottom:14px; color:var(--accent); font-size:13px; display:flex; align-items:center; gap:8px;">
-            <i data-lucide="check-circle-2" style="width:14px;height:14px;flex-shrink:0;"></i>
-            Zahtjev je poslan administratoru na potvrdu.
-        </div>
-        {% endif %}
 
         <!-- ── Info bar ─────────────────────────────────────────────────── -->
         <div style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:18px; font-size:12px; color:var(--text-muted);">
@@ -344,12 +337,6 @@
                             </form>
                             {% endif %}
                         </div>
-                        {% else %}
-                        <button type="button"
-                                onclick="openChangeModal({{ pick.id }}, {{ slot.slot_id }}, {{ pid }}, '{{ pick.fixture|e }}', '{{ pick.tip|e }}', {{ pick.odds or 'null' }})"
-                                style="background:var(--surface3); color:#0d0d0d; font-size:10px; padding:2px 8px; margin-top:4px;">
-                            <i data-lucide="message-square-warning" style="width:10px;height:10px;vertical-align:middle;"></i> Zatraži izmjenu
-                        </button>
                         {% endif %}
                     </div>
                     {% endfor %}
@@ -558,31 +545,6 @@
     updateCountdowns();
     setInterval(updateCountdowns, 1000);
 
-    // ── Change-request modal ────────────────────────────────────────────────
-    function openChangeModal(pickId, slotId, playerId, fixture, tip, odds) {
-        document.getElementById('cr-pick-id').value = pickId;
-        document.getElementById('cr-slot-id').value = slotId;
-        document.getElementById('cr-player-id').value = playerId;
-        document.getElementById('cr-current-fixture').textContent = fixture;
-        document.getElementById('cr-current-tip').textContent = tip;
-        document.getElementById('cr-new-fixture').value = fixture;
-        document.getElementById('cr-new-tip').value = tip;
-        document.getElementById('cr-new-odds').value = odds || '';
-        document.getElementById('cr-reason').value = '';
-        document.getElementById('cr-request-type').value = 'EDIT';
-        toggleCrFields();
-        document.getElementById('changeModal').style.display = 'flex';
-    }
-
-    function closeChangeModal() {
-        document.getElementById('changeModal').style.display = 'none';
-    }
-
-    function toggleCrFields() {
-        const isDelete = document.getElementById('cr-request-type').value === 'DELETE';
-        document.getElementById('cr-edit-fields').style.display = isDelete ? 'none' : 'block';
-    }
-
     // ── Direct edit modal (admin or pick owner) ──────────────────────────────
     function openEditModal(pickId, fixture, tip, odds) {
         document.getElementById('edit-form-action').action = '/picks/edit/' + pickId;
@@ -625,64 +587,6 @@
                         Odustani
                     </button>
                     <button type="submit">Spremi</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- ── Change request modal ──────────────────────────────────────────── -->
-<div id="changeModal" class="modal-overlay" style="display:none;">
-    <div class="window modal-window" style="width:340px;">
-        <div class="title-bar" style="padding:10px 14px;">
-            <div class="title-bar-text" style="font-size:13px;">Zatraži izmjenu para</div>
-        </div>
-        <div class="window-body" style="padding:16px;">
-            <form method="POST" action="/picks/change-request">
-                <input type="hidden" id="cr-pick-id" name="pick_id">
-                <input type="hidden" id="cr-slot-id" name="slot_id">
-                <input type="hidden" id="cr-player-id" name="player_id">
-
-                <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
-                    Trenutni par: <strong id="cr-current-fixture" style="color:var(--text);"></strong>
-                    (<span id="cr-current-tip"></span>)
-                </p>
-
-                <div class="field-row-stacked">
-                    <label>Vrsta zahtjeva</label>
-                    <select id="cr-request-type" name="request_type" onchange="toggleCrFields()"
-                            style="background:var(--surface2) !important; border:1px solid var(--border) !important; border-radius:6px !important; padding:7px 10px !important; font-size:13px !important; color:var(--text) !important; width:100%;">
-                        <option value="EDIT">Izmijeni par</option>
-                        <option value="DELETE">Obriši par</option>
-                    </select>
-                </div>
-
-                <div id="cr-edit-fields">
-                    <div class="field-row-stacked">
-                        <label>Nova utakmica</label>
-                        <input type="text" id="cr-new-fixture" name="new_fixture">
-                    </div>
-                    <div class="field-row-stacked">
-                        <label>Novi tip</label>
-                        <input type="text" id="cr-new-tip" name="new_tip">
-                    </div>
-                    <div class="field-row-stacked">
-                        <label>Novi tečaj</label>
-                        <input type="number" id="cr-new-odds" name="new_odds" step="0.01" min="1.01">
-                    </div>
-                </div>
-
-                <div class="field-row-stacked" style="margin-bottom:16px;">
-                    <label>Razlog (opcionalno)</label>
-                    <input type="text" id="cr-reason" name="reason" placeholder="npr. pogrešno upisan tip">
-                </div>
-
-                <div class="modal-buttons">
-                    <button type="button" onclick="closeChangeModal()"
-                            style="background:var(--surface2); color:var(--text); border:1px solid var(--border) !important;">
-                        Odustani
-                    </button>
-                    <button type="submit">Posalji zahtjev</button>
                 </div>
             </form>
         </div>
