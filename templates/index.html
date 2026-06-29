@@ -61,11 +61,18 @@
         <!-- Right side: Admin -->
         <div class="menu-item" @click="openMenu = openMenu === 'admin' ? null : 'admin'"
              style="margin-left:auto;">
-            <span x-show="!admin_logged_in"><i data-lucide="log-in" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Login</span>
+            <span x-show="!admin_logged_in && !current_player_id"><i data-lucide="log-in" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Login</span>
             <span x-show="admin_logged_in" style="color:var(--green);"><i data-lucide="shield-check" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Admin ▾</span>
+            <span x-show="!admin_logged_in && current_player_id" style="color:var(--accent);"><i data-lucide="user-round-check" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i><span x-text="current_player_name"></span> ▾</span>
             <div class="dropdown" x-show="openMenu === 'admin'" style="right:0; left:auto;">
-                <a x-show="!admin_logged_in" @click.prevent="loginModal=true; openMenu=null" href="#"><i data-lucide="log-in" style="width:13px;height:13px;"></i>Prijava</a>
+                <template x-if="!admin_logged_in && !current_player_id">
+                    <div>
+                        <a @click.prevent="loginModal=true; openMenu=null" href="#"><i data-lucide="shield" style="width:13px;height:13px;"></i>Admin prijava</a>
+                        <a href="/player_login"><i data-lucide="user-round" style="width:13px;height:13px;"></i>Prijava igrača</a>
+                    </div>
+                </template>
                 <a x-show="admin_logged_in" href="/logout"><i data-lucide="log-out" style="width:13px;height:13px;"></i>Odjava</a>
+                <a x-show="!admin_logged_in && current_player_id" href="/player_logout"><i data-lucide="log-out" style="width:13px;height:13px;"></i>Odjava</a>
                 <template x-if="admin_logged_in">
                     <span style="padding:10px 16px; color:var(--green); font-size:12px; display:block; font-weight:600; border-top:1px solid var(--border);">
                         <i data-lucide="check-circle" style="width:12px;height:12px;margin-right:4px;vertical-align:middle;"></i>Prijavljen kao admin
@@ -685,6 +692,8 @@ function ticketApp() {
         loginModal: false,
         playersOpen: false,
         admin_logged_in: {{ 'true' if admin_logged_in else 'false' }},
+        current_player_id: {{ current_player_id | tojson if current_player_id else 'null' }},
+        current_player_name: {{ current_player_name | tojson if current_player_name else 'null' }},
 
         filterTicket(text, status) {
             let searchMatch = true;

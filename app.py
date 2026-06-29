@@ -608,13 +608,17 @@ def update_ticket_results():
                 UPDATE bets SET result=?, start_time=COALESCE(?, start_time), score=COALESCE(?, score)
                 WHERE ticket_id=? AND fixture_name=?
             """, (leg.get("result"), start_time, score, ticket_id, leg.get("fixtureName")))
+        try:
+            psk_payout = float(data["payoutDetailsWinning"]) if data.get("payoutDetailsWinning") else None
+        except (ValueError, TypeError):
+            psk_payout = None
         c.execute("""
             UPDATE tickets SET last_updated=?, ticket_result=?,
             payout = CASE WHEN ? = 'WINNING' THEN COALESCE(?, payout) ELSE payout END
             WHERE ticket_id=?
         """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), data.get("result"),
               data.get("result"),
-              float(data["payoutDetailsWinning"]) if data.get("payoutDetailsWinning") else None,
+              psk_payout,
               ticket_id))
         conn.commit()
 
@@ -715,17 +719,24 @@ def add_player():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
-    # Reject duplicate usernames up front (clearer than a raw IntegrityError)
+    # Check if player already exists (may have been removed before)
+    c.execute("SELECT id, active FROM players WHERE name=?", (name,))
+    existing_row = c.fetchone()
+    existing_pid = existing_row[0] if existing_row else None
+
+    # Reject duplicate usernames up front (clearer than a raw IntegrityError).
+    # Exclude the player's own row so re-submitting their unchanged username
+    # while reactivating doesn't falsely flag as taken.
     if username:
-        c.execute("SELECT id FROM players WHERE username=?", (username,))
-        existing_user = c.fetchone()
-        if existing_user:
+        if existing_pid:
+            c.execute("SELECT id FROM players WHERE username=? AND id!=?", (username, existing_pid))
+        else:
+            c.execute("SELECT id FROM players WHERE username=?", (username,))
+        if c.fetchone():
             conn.close()
             return redirect("/?error=username_taken")
 
-    # Check if player already exists (may have been removed before)
-    c.execute("SELECT id, active FROM players WHERE name=?", (name,))
-    row = c.fetchone()
+    row = existing_row
 
     if row:
         pid, active = row
@@ -986,7 +997,7 @@ def chart_data():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
-    PLAYER_NAMES = get_player_names(conn)
+    PLAYER_NAMES = get_active_player_names(conn)
     period_id = request.args.get("period", type=int)
 
     if period_id:
@@ -1287,7 +1298,10 @@ def manual_ticket():
         created_at = request.form.get("created_at", "").strip()
         ticket_result = request.form.get("ticket_result", "PENDING")
         payout_raw = request.form.get("payout", "").strip()
-        payout = float(payout_raw) if payout_raw else None
+        try:
+            payout = float(payout_raw) if payout_raw else None
+        except ValueError:
+            payout = None
 
         fixtures   = request.form.getlist("fixture")
         players    = request.form.getlist("player_id")
@@ -1600,7 +1614,7 @@ def picks():
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    player_names = get_player_names(conn)
+    player_names = get_active_player_names(conn)
     slots = get_current_slot_info()
     slot_ids = ensure_slots_exist(c, slots, now_str)
     conn.commit()
@@ -1787,7 +1801,10 @@ def edit_ticket(ticket_id):
     if request.method == "POST":
         ticket_result = request.form.get("ticket_result", "PENDING")
         payout_raw    = request.form.get("payout", "").strip()
-        payout        = float(payout_raw) if payout_raw else None
+        try:
+            payout = float(payout_raw) if payout_raw else None
+        except ValueError:
+            payout = None
         bet_ids = request.form.getlist("bet_id")
         results = request.form.getlist("result")
         scores  = request.form.getlist("score")
@@ -2004,10 +2021,15 @@ def api_leaderboard():
 
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
+    # Use ALL players for the calculation (so historical payment chains stay
+    # correct) but only return active players' rows, matching /leaderboard.
     player_names = get_player_names(conn)
+    active_ids = set(get_active_player_names(conn).keys())
     c.execute("SELECT ticket_id FROM tickets WHERE ticket_result NOT IN ('PENDING','UNKNOWN') ORDER BY id ASC")
     tids = [r[0] for r in c.fetchall()]
     data, payments = compute_leaderboard_stats(c, player_names, tids)
+    data = [row for row in data if row["player_id"] in active_ids]
+    payments = [row for row in payments if row.get("player_id") in active_ids]
     conn.close()
     return jsonify({"leaderboard": data, "payments": payments})
 

@@ -164,19 +164,23 @@
         <div class="menu-item" id="adminMenuBtn" onclick="toggleAdminMenu()" style="margin-left:auto; cursor:pointer; user-select:none;">
             {% if admin_logged_in %}
             <span style="color:var(--green);"><i data-lucide="shield-check" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Admin ▾</span>
+            {% elif current_player_id %}
+            <span style="color:var(--accent);"><i data-lucide="user-round-check" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>{{ current_player_name }} ▾</span>
             {% else %}
             <span><i data-lucide="log-in" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Login</span>
             {% endif %}
             <div class="dropdown" id="adminDropdown" style="display:none; right:0; left:auto;">
                 {% if admin_logged_in %}
                 <a href="/logout"><i data-lucide="log-out" style="width:13px;height:13px;"></i>Odjava</a>
+                {% elif current_player_id %}
+                <a href="/player_logout"><i data-lucide="log-out" style="width:13px;height:13px;"></i>Odjava</a>
                 {% else %}
-                <a href="/login"><i data-lucide="log-in" style="width:13px;height:13px;"></i>Prijava</a>
+                <a href="/login"><i data-lucide="shield" style="width:13px;height:13px;"></i>Admin prijava</a>
+                <a href="/player_login"><i data-lucide="user-round" style="width:13px;height:13px;"></i>Prijava igrača</a>
                 {% endif %}
             </div>
         </div>
     </div>
-        </div>
 
     </div>
 
