@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, session, jsonify
 import requests
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import threading
 import time
 import os
@@ -11,12 +11,41 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"  # Change in production
+app.config["SESSION_COOKIE_NAME"] = "propali_session"
+# "Remember me" sessions persist 30 days; without it the cookie is dropped
+# when the browser closes (Flask's default for non-permanent sessions).
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 
 API_URL = "https://api.psk.hr/betslip-history/v2/detail"
 DB_NAME = "database.db"
 
 ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "password123"
+
+# Endpoints reachable WITHOUT being logged in as admin or player.
+# Everything else is gated by the before_request hook below.
+PUBLIC_ENDPOINTS = {
+    "login", "player_login", "static",
+    # The /api/* routes have their own X-Api-Key auth (used by the Flutter
+    # admin app) and are intentionally independent of the session login.
+    "api_picks_status", "api_picks_for_slot", "api_change_requests",
+    "api_approve_change_request", "api_deny_change_request", "api_leaderboard",
+}
+
+
+@app.before_request
+def require_login():
+    """
+    Site-wide access gate: nobody can see anything (leaderboard, picks,
+    rules, tickets, etc.) until they're logged in as either the admin or
+    a player. Only the login pages, static assets, and the API endpoints
+    (which use their own API-key auth) are reachable while logged out.
+    """
+    if request.endpoint in PUBLIC_ENDPOINTS or request.endpoint is None:
+        return None
+    if session.get("admin_logged_in") or session.get("player_logged_in_id"):
+        return None
+    return redirect("/player_login")
 
 # ---------------------------------------------------------------------------
 # Helpers: load player dicts dynamically from DB
@@ -609,14 +638,18 @@ def login():
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
+        remember = request.form.get("remember_me") == "on"
         if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
             session["admin_logged_in"] = True
+            session.permanent = remember
             return redirect("/")
         else:
             return render_template("login.html", error="Invalid credentials",
+                                   admin_logged_in=session.get("admin_logged_in"),
                                    current_player_id=session.get("player_logged_in_id"),
                                    current_player_name=session.get("player_logged_in_name"))
     return render_template("login.html", error=None,
+                           admin_logged_in=session.get("admin_logged_in"),
                            current_player_id=session.get("player_logged_in_id"),
                            current_player_name=session.get("player_logged_in_name"))
 
@@ -632,6 +665,7 @@ def player_login():
     if request.method == "POST":
         username = request.form.get("username", "").strip().lower()
         password = request.form.get("password", "")
+        remember = request.form.get("remember_me") == "on"
 
         conn = sqlite3.connect(DB_NAME)
         c = conn.cursor()
@@ -642,6 +676,7 @@ def player_login():
         if row and row[2] and check_password_hash(row[2], password):
             session["player_logged_in_id"] = row[0]
             session["player_logged_in_name"] = row[1]
+            session.permanent = remember
             return redirect("/picks")
         return render_template("player_login.html", error="Neispravno korisničko ime ili lozinka")
     return render_template("player_login.html", error=None)
@@ -1182,6 +1217,7 @@ def compute_leaderboard_stats(c, player_names, ticket_ids):
 
     payment_data = [
         {
+            "player_id": row["player_id"],
             "name": row["name"],
             "total_paid": round(payments[row["player_id"]], 2),
             "total_won": round(winnings[row["player_id"]], 2),
@@ -1343,7 +1379,12 @@ def leaderboard():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
 
+    # Use ALL players (active + inactive) for the underlying calculation so
+    # historical payment chains stay correct — an inactive player's past
+    # ticket still needs to count when working out who owes what. We only
+    # filter rows out of the displayed table afterwards.
     PLAYER_NAMES = get_player_names(conn)
+    active_ids = set(get_active_player_names(conn).keys())
 
     # ── Overall: all resolved tickets ────────────────────────────────────────
     c.execute("""
@@ -1353,6 +1394,8 @@ def leaderboard():
     """)
     all_resolved = [r[0] for r in c.fetchall()]
     overall_data, overall_payments = compute_leaderboard_stats(c, PLAYER_NAMES, all_resolved)
+    overall_data = [row for row in overall_data if row["player_id"] in active_ids]
+    overall_payments = [row for row in overall_payments if row.get("player_id") in active_ids]
 
     # ── Periods ───────────────────────────────────────────────────────────────
     c.execute("SELECT id, name, start_date FROM periods ORDER BY start_date ASC")
@@ -1367,6 +1410,8 @@ def leaderboard():
         """, (pid,))
         period_tids = [r[0] for r in c.fetchall()]
         pd_data, pd_payments = compute_leaderboard_stats(c, PLAYER_NAMES, period_tids)
+        pd_data = [row for row in pd_data if row["player_id"] in active_ids]
+        pd_payments = [row for row in pd_payments if row.get("player_id") in active_ids]
         period_tabs.append({
             "id": pid,
             "name": pname,

@@ -19,21 +19,6 @@
         <div class="title-bar-text"><span style="font-family:'Bebas Neue'; letter-spacing:2px; font-size:16px;"><i data-lucide="user-round" style="width:14px;height:14px;margin-right:5px;vertical-align:middle;"></i>Prijava igrača</span></div>
     </div>
 
-    <div class="menu-bar" id="mainMenuBar">
-        <a href="/"            class="menu-item" style="text-decoration:none;"><i data-lucide="home"        style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Početna</a>
-        <a href="/leaderboard" class="menu-item" style="text-decoration:none;"><i data-lucide="trophy"      style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Poredak</a>
-        <a href="/pravila"     class="menu-item" style="text-decoration:none;"><i data-lucide="scroll-text" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Pravila</a>
-        <a href="/players"     class="menu-item" style="text-decoration:none;"><i data-lucide="users"       style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Igrači</a>
-        <a href="/picks"       class="menu-item" style="text-decoration:none;"><i data-lucide="pencil-line" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Parovi</a>
-        <div class="menu-item" id="adminMenuBtn" onclick="toggleAdminMenu()" style="margin-left:auto; cursor:pointer; user-select:none;">
-            <span><i data-lucide="log-in" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Login</span>
-            <div class="dropdown" id="adminDropdown" style="display:none; right:0; left:auto;">
-                <a href="/login"><i data-lucide="shield" style="width:13px;height:13px;"></i>Admin prijava</a>
-                <a href="/player_login"><i data-lucide="user-round" style="width:13px;height:13px;"></i>Prijava igrača</a>
-            </div>
-        </div>
-    </div>
-
     <div class="window-body" style="padding:24px;">
         <p style="margin-bottom:20px; color:var(--text-muted);">Prijavite se da biste predali ili uredili svoje parove.</p>
 
@@ -49,16 +34,33 @@
                 <input type="text" id="username" name="username" placeholder="npr. ana" required autocomplete="username">
             </div>
 
-            <div class="field-row-stacked" style="margin-bottom:20px;">
+            <div class="field-row-stacked" style="margin-bottom:16px;">
                 <label for="password">Lozinka</label>
                 <input type="password" id="password" name="password" placeholder="••••••••" required autocomplete="current-password">
             </div>
 
+            <label style="display:flex; align-items:center; gap:7px; margin-bottom:20px; font-size:13px; color:var(--text-muted); cursor:pointer;">
+                <input type="checkbox" name="remember_me" style="width:15px; height:15px; margin:0; cursor:pointer;">
+                Zapamti me na ovom uređaju
+            </label>
+
             <div style="display:flex; justify-content:flex-end; gap:8px;">
-                <a href="/"><button type="button" style="background:var(--surface3); color:var(--text); border:1px solid var(--border) !important;">Odustani</button></a>
                 <button type="submit">Prijava →</button>
             </div>
         </form>
+
+        <div style="display:flex; align-items:center; gap:10px; margin-top:20px;">
+            <hr style="flex:1; border:none; border-top:1px solid var(--border); margin:0;">
+            <span style="font-size:11px; color:var(--text-muted);">ili</span>
+            <hr style="flex:1; border:none; border-top:1px solid var(--border); margin:0;">
+        </div>
+
+        <a href="/login" style="display:block; margin-top:14px;">
+            <button type="button" style="width:100%; background:var(--surface3); color:var(--text); border:1px solid var(--border) !important;">
+                <i data-lucide="shield" style="width:13px;height:13px;vertical-align:middle;margin-right:6px;"></i>
+                Admin prijava
+            </button>
+        </a>
 
         <p style="margin-top:18px; font-size:12px; color:var(--text-muted);">
             Nemate pristupne podatke? Tražite ih od administratora.
@@ -67,15 +69,6 @@
 </div>
 
 <script>
-    function toggleAdminMenu() {
-        const d = document.getElementById('adminDropdown');
-        d.style.display = d.style.display === 'flex' ? 'none' : 'flex';
-    }
-    document.addEventListener('click', function(e) {
-        const btn = document.getElementById('adminMenuBtn');
-        const dd  = document.getElementById('adminDropdown');
-        if (dd && btn && !btn.contains(e.target)) dd.style.display = 'none';
-    });
     lucide.createIcons();
 </script>
 </body>
