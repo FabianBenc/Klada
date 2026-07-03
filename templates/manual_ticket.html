@@ -206,7 +206,9 @@
 
     const PLAYERS = {
         {% for pid, pname in player_names.items() %}
+        {% if pname not in ['Joza.'] %}
         {{ pid }}: "{{ pname }}",
+        {% endif %}
         {% endfor %}
     };
 

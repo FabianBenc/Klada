@@ -36,6 +36,7 @@
 </head>
 
 <body>
+{% set HIDDEN_NAMES = ['Joza.'] %}
 
 <div class="window">
     <div class="title-bar" style="padding: 12px 18px;">
@@ -129,26 +130,53 @@
         </div>
         <div class="window-body" x-show="playersOpen" style="padding:12px 14px;">
 
+            {% if request.args.get('error') == 'username_taken' %}
+            <div style="background:rgba(229,115,115,0.12); border:1px solid rgba(229,115,115,0.4);
+                        border-radius:6px; padding:10px 14px; margin-bottom:12px;
+                        color:var(--red); font-size:13px; display:flex; align-items:center; gap:8px;">
+                <i data-lucide="alert-triangle" style="width:14px;height:14px;flex-shrink:0;"></i>
+                Korisničko ime je već zauzeto — odaberi drugo.
+            </div>
+            {% endif %}
+
             <!-- Current players list -->
             <div style="margin-bottom:14px;">
                 <p style="font-size:12px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.8px; margin-bottom:8px;">Aktivni igrači (sljedeći tiket)</p>
                 <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
                     {% for player in all_players %}
-                    {% if player.active %}
-                    <div style="display:flex; align-items:center; gap:6px; background:var(--surface2); border:1px solid var(--border); border-radius:20px; padding:4px 10px 4px 12px;">
-                        <div>
-                            <span style="font-size:13px; font-weight:500; color:var(--green);">{{ player.name }}</span>
-                            <span style="font-size:10px; color:var(--text-muted); display:block; line-height:1.2;">od {{ player.joined_at[:10] }}</span>
+                    {% if player.active and player.name not in HIDDEN_NAMES %}
+                    <div x-data="{ editingCreds: false }" style="background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:4px 10px 4px 12px; min-width:0;">
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <div>
+                                <span style="font-size:13px; font-weight:500; color:var(--green);">{{ player.name }}</span>
+                                <span style="font-size:10px; color:var(--text-muted); display:block; line-height:1.2;">
+                                    od {{ player.joined_at[:10] }}
+                                    {% if player.username %}&nbsp;·&nbsp;<span style="color:var(--accent);">@{{ player.username }}</span>{% endif %}
+                                </span>
+                            </div>
+                            <button type="button" @click="editingCreds = !editingCreds"
+                                    title="{{ 'Uredi prijavu' if player.username else 'Postavi prijavu' }}"
+                                    style="background:transparent !important; border:none !important; color:var(--text-muted); font-size:13px; padding:0 2px; line-height:1; cursor:pointer; box-shadow:none !important; min-width:0;">
+                                <i data-lucide="key-round" style="width:13px;height:13px;vertical-align:middle;"></i>
+                            </button>
+                            <form method="POST" action="/remove_player/{{ player.id }}" style="display:inline;" onsubmit="return confirm('Ukloniti {{ player.name }}? Svi prethodni tiketi ostaju netaknuti.')">
+                                <button type="submit" style="background:transparent !important; border:none !important; color:var(--red); font-size:14px; padding:0 2px; line-height:1; cursor:pointer; box-shadow:none !important; min-width:0;">✕</button>
+                            </form>
                         </div>
-                        <form method="POST" action="/remove_player/{{ player.id }}" style="display:inline;" onsubmit="return confirm('Ukloniti {{ player.name }}? Svi prethodni tiketi ostaju netaknuti.')">
-                            <button type="submit" style="background:transparent !important; border:none !important; color:var(--red); font-size:14px; padding:0 2px; line-height:1; cursor:pointer; box-shadow:none !important; min-width:0;">✕</button>
+                        <form x-show="editingCreds" method="POST" action="/set_player_credentials/{{ player.id }}"
+                              style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:8px 0 6px;">
+                            <input type="text" name="username" placeholder="korisničko ime" value="{{ player.username or '' }}"
+                                   autocomplete="off" style="width:120px; font-size:12px !important; padding:5px 8px !important;">
+                            <input type="password" name="password" placeholder="nova lozinka"
+                                   autocomplete="new-password" style="width:120px; font-size:12px !important; padding:5px 8px !important;">
+                            <button type="submit" style="font-size:11px; padding:5px 10px;">Spremi</button>
                         </form>
                     </div>
                     {% endif %}
                     {% endfor %}
                 </div>
 
-                {% set inactive_players = all_players | selectattr('active', 'equalto', 0) | list %}
+                {% set inactive_players = all_players | selectattr('active', 'equalto', 0) | rejectattr('name', 'in', HIDDEN_NAMES) | list %}
                 {% if inactive_players %}
                 <p style="font-size:12px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.8px; margin-bottom:8px; margin-top:14px;">Neaktivni igrači</p>
                 <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
@@ -169,10 +197,14 @@
             <form method="POST" action="/add_player" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; border-top:1px solid var(--border); padding-top:12px;">
                 <input type="text" name="player_name" placeholder="Ime novog igrača" required
                        style="flex:1; min-width:160px;">
+                <input type="text" name="username" placeholder="korisničko ime (opcionalno)" autocomplete="off"
+                       style="flex:1; min-width:160px;">
+                <input type="password" name="password" placeholder="lozinka (opcionalno)" autocomplete="new-password"
+                       style="flex:1; min-width:160px;">
                 <button type="submit" style="white-space:nowrap; background:var(--green) !important; color:#000 !important;">+ Dodaj igrača</button>
             </form>
             <p style="margin-top:8px; font-size:11px; color:var(--text-muted);">
-                ℹ Novi igrač plaća €1 za sebe pri prvom tiketu na kojemu sudjeluje. Datum dodavanja određuje od kojeg tiketa igrač sudjeluje — tiketi odigrani <em>prije</em> tog datuma automatski ga isključuju, čak i pri ponovnom uvozu tiketa.
+                ℹ Novi igrač plaća €1 za sebe pri prvom tiketu na kojemu sudjeluje. Datum dodavanja određuje od kojeg tiketa igrač sudjeluje — tiketi odigrani <em>prije</em> tog datuma automatski ga isključuju, čak i pri ponovnom uvozu tiketa. Korisničko ime i lozinka su opcionalni pri dodavanju — omogućuju igraču prijavu na <code>/player_login</code> za predaju vlastitih parova; mogu se postaviti i kasnije klikom na 🔑 pored imena.
             </p>
         </div>
     </div>
@@ -187,6 +219,7 @@
             <div class="window-body" style="display:flex; flex-wrap:wrap; gap:16px; padding:14px 16px; justify-content: center">
 
                 {% for player_id, name in active_player_names.items() %}
+                {% if name not in HIDDEN_NAMES %}
                 {% set streak = loss_streaks.get(player_id, 0) %}
 
                 <div class="streak-panel">
@@ -411,6 +444,7 @@
                         {% endif %}
                     </small>
                 </div>
+                {% endif %}
                 {% endfor %}
 
             </div>
@@ -431,6 +465,7 @@
             </div>
             <div class="window-body" style="display:flex; flex-wrap:wrap; gap:16px; padding:14px 16px; justify-content: center">
                 {% for player_id, name in active_player_names.items() %}
+                {% if name not in HIDDEN_NAMES %}
                 {% set wstreak = win_streaks.get(player_id, 0) %}
                 {% set size = 1.5 - (wstreak * 0.05) %}
                 {% if size < 0.6 %}{% set size = 0.6 %}{% endif %}
@@ -450,6 +485,7 @@
                         {% if wstreak == 0 %}–{% else %}{{ wstreak }} zaredom{% endif %}
                     </small>
                 </div>
+                {% endif %}
                 {% endfor %}
             </div>
         </div>
@@ -512,7 +548,7 @@
              x-data="{ open: true, editing: false }"
              x-show="filterTicket(`{{ ticket[1] }}
                 {% for bet in bets %}
-                    {% if bet[0] == ticket[0] %}
+                    {% if bet[0] == ticket[0] and player_names.get(bet[1]) not in HIDDEN_NAMES %}
                         {{ player_names.get(bet[1], 'Unknown') }} {{ bet[2] }}
                     {% endif %}
                 {% endfor %}
@@ -571,7 +607,7 @@
                         </thead>
                         <tbody>
                             {% for bet in bets %}
-                            {% if bet[0] == ticket[0] %}
+                            {% if bet[0] == ticket[0] and player_names.get(bet[1]) not in HIDDEN_NAMES %}
                             <tr>
                                 <td x-html="highlight('{{ player_names.get(bet[1], 'Unknown') }}')"></td>
                                 <td x-html="highlight('{{ bet[2] }}')"></td>
@@ -609,7 +645,7 @@
                             </thead>
                             <tbody>
                                 {% for bet in bets %}
-                                {% if bet[0] == ticket[0] %}
+                                {% if bet[0] == ticket[0] and player_names.get(bet[1]) not in HIDDEN_NAMES %}
                                 <tr>
                                     <td>
                                         <select name="bet_player_{{ bet[5] }}">
@@ -617,7 +653,9 @@
                                             <option value="{{ bet[1] }}" selected disabled>{{ player_names.get(bet[1], 'Nepoznat') }} (neaktivan)</option>
                                             {% endif %}
                                             {% for pid, pname in active_player_names.items() %}
+                                            {% if pname not in HIDDEN_NAMES %}
                                             <option value="{{ pid }}" {% if pid == bet[1] %}selected{% endif %}>{{ pname }}</option>
+                                            {% endif %}
                                             {% endfor %}
                                         </select>
                                     </td>
@@ -690,7 +728,7 @@ function ticketApp() {
         search: '',
         filter: 'ALL',
         loginModal: false,
-        playersOpen: false,
+        playersOpen: {{ 'true' if request.args.get('error') == 'username_taken' else 'false' }},
         admin_logged_in: {{ 'true' if admin_logged_in else 'false' }},
         current_player_id: {{ current_player_id | tojson if current_player_id else 'null' }},
         current_player_name: {{ current_player_name | tojson if current_player_name else 'null' }},

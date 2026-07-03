@@ -68,6 +68,8 @@
 </head>
 
 {% macro render_tab(rows, payments, tab_id, title='', start_date='') %}
+{% set rows = rows | rejectattr('name', 'in', ['Joza.']) | list %}
+{% set payments = payments | rejectattr('name', 'in', ['Joza.']) | list %}
 <div>
     {% if title %}
     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:4px;">
@@ -354,7 +356,9 @@
                 const canvas = document.getElementById('chart-' + tabId);
                 if (!canvas) return;
 
-                const datasets = data.datasets.map((ds, i) => ({
+                const datasets = data.datasets
+                    .filter(ds => ds.label !== 'Joza.')
+                    .map((ds, i) => ({
                     label: ds.label,
                     data: ds.data,
                     borderColor: COLORS[i % COLORS.length],
