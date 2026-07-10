@@ -147,7 +147,7 @@ def init_db():
     c.execute("SELECT COUNT(*) FROM players")
     if c.fetchone()[0] == 0:
         # Founding players: joined_at = epoch so they appear on ALL tickets
-        legacy = ["Jegulja", "Alexandar", "Mama", "Kiki", "Livro", "Joza."]
+        legacy = ["Jegulja", "Alexandar", "Mama", "Kiki", "Livro", "Deleted user"]
         for name in legacy:
             c.execute(
                 "INSERT OR IGNORE INTO players (name, active, joined_at) VALUES (?, 1, '2000-01-01 00:00')",
