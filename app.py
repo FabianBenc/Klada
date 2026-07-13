@@ -1623,13 +1623,12 @@ def picks():
     for s in slots:
         sid = slot_ids[s["slot_type"]]
         c.execute("""SELECT p.id, p.player_id, pl.name, p.fixture, p.tip, p.odds, p.submitted_at
-                     FROM picks p JOIN players pl ON pl.id=p.player_id
+                     FROM picks p
+                     JOIN players pl ON pl.id=p.player_id AND pl.active=1
                      WHERE p.slot_id=? ORDER BY p.submitted_at ASC""", (sid,))
         by_player = {}
         for row in c.fetchall():
             pid = row[1]
-            if pid not in active_ids:
-                continue  # skip inactive players
             if pid not in by_player: by_player[pid] = []
             by_player[pid].append({"id": row[0], "player_id": pid, "player_name": row[2],
                                    "fixture": row[3], "tip": row[4], "odds": row[5], "submitted_at": row[6]})
@@ -1645,13 +1644,12 @@ def picks():
     for hs in c.fetchall():
         hsid = hs[0]
         c.execute("""SELECT p.id, p.player_id, pl.name, p.fixture, p.tip, p.odds
-                     FROM picks p JOIN players pl ON pl.id=p.player_id
+                     FROM picks p
+                     JOIN players pl ON pl.id=p.player_id AND pl.active=1
                      WHERE p.slot_id=? ORDER BY p.player_id, p.submitted_at ASC""", (hsid,))
         by_player = {}
         for row in c.fetchall():
             pid = row[1]
-            if pid not in active_ids:
-                continue  # skip inactive players in history too
             if pid not in by_player: by_player[pid] = []
             by_player[pid].append({"id": row[0], "player_id": pid, "player_name": row[2],
                                    "fixture": row[3], "tip": row[4], "odds": row[5]})
