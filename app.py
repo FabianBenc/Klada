@@ -1394,27 +1394,36 @@ def debug_players():
         return "Unauthorized", 403
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT id, name, active, typeof(active) FROM players ORDER BY id")
+    c.execute("SELECT id, name, active FROM players ORDER BY id")
     players_rows = c.fetchall()
     c.execute("""SELECT p.id, p.slot_id, p.player_id, p.fixture, p.tip, pl.name, pl.active
                  FROM picks p LEFT JOIN players pl ON pl.id=p.player_id
                  WHERE pl.active=0 OR pl.id IS NULL
                  ORDER BY p.slot_id DESC, p.id DESC""")
     inactive_picks = c.fetchall()
-    c.execute("""SELECT ps.id, ps.week_label, ps.slot_type,
-                        COUNT(DISTINCT p.player_id) as player_count
-                 FROM pick_slots ps
-                 LEFT JOIN picks p ON p.slot_id=ps.id
-                 GROUP BY ps.id ORDER BY ps.id DESC LIMIT 10""")
-    slots_rows = c.fetchall()
     conn.close()
     out = "<h3>Players</h3>"
-    out += "<br>".join(f"id={r[0]} name={r[1]!r} active={r[2]!r} type={r[3]}" for r in players_rows)
+    out += "<br>".join(f"id={r[0]} name={r[1]!r} active={r[2]!r}" for r in players_rows)
     out += "<h3>Picks from INACTIVE players</h3>"
-    out += "<br>".join(f"pick_id={r[0]} slot_id={r[1]} player_id={r[2]} fixture={r[3]!r} tip={r[4]!r} name={r[5]!r} active={r[6]!r}" for r in inactive_picks) or "none"
-    out += "<h3>Recent slots</h3>"
-    out += "<br>".join(f"slot_id={r[0]} week_label={r[1]!r} type={r[2]!r} player_count={r[3]}" for r in slots_rows)
+    out += ("<br>".join(f"pick_id={r[0]} slot_id={r[1]} player_id={r[2]} fixture={r[3]!r} tip={r[4]!r} name={r[5]!r} active={r[6]!r}" for r in inactive_picks)) or "none"
+    out += f"<h3>Version check</h3>SQL filter: AND pl.active != 0 present in code"
     return out
+
+
+@app.route("/debug/delete_inactive_picks", methods=["POST"])
+def debug_delete_inactive_picks():
+    """One-time cleanup: delete all picks from inactive players."""
+    if not session.get("admin_logged_in"):
+        return "Unauthorized", 403
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("""DELETE FROM picks WHERE player_id IN (
+                     SELECT id FROM players WHERE active=0
+                 )""")
+    deleted = c.rowcount
+    conn.commit()
+    conn.close()
+    return f"Deleted {deleted} picks from inactive players. <a href='/picks'>Go to picks</a>"
 
 
 @app.route("/leaderboard")
