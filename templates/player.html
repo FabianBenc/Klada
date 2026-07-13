@@ -145,7 +145,6 @@
 </head>
 
 <body>
-{% set HIDDEN_NAMES = ['Joza.'] %}
 <div class="window">
     <div class="title-bar" style="padding:12px 18px;">
         <div class="title-bar-text">
@@ -192,7 +191,7 @@
         <!-- ── Player switcher ── -->
         <div class="player-switcher">
             {% for p in all_players %}
-            {% if p.name not in HIDDEN_NAMES %}
+            {% if p.active %}
             <a href="/player/{{ p.id }}"
                class="player-pill {% if p.id == player_id %}active{% endif %}">
                 {{ p.name }}
