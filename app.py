@@ -1575,7 +1575,7 @@ def get_current_slot_info():
     weekday_opens = next_monday - timedelta(days=1)
     weekday_locks = next_monday + timedelta(hours=12)
     weekend_opens = next_monday + timedelta(days=2)
-    weekend_locks = next_monday + timedelta(days=4, hours=12)
+    weekend_locks = next_monday + timedelta(days=4, hours=15)
     iso_year, iso_week, _ = next_monday.isocalendar()
     base = f"{iso_year}-W{iso_week:02d}"
     return [
