@@ -1395,9 +1395,17 @@ def debug_players():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute("SELECT id, name, active, typeof(active) FROM players ORDER BY id")
-    rows = c.fetchall()
+    players_rows = c.fetchall()
+    c.execute("""SELECT p.id, p.player_id, p.fixture, p.tip, pl.name, pl.active
+                 FROM picks p LEFT JOIN players pl ON pl.id=p.player_id
+                 ORDER BY p.slot_id DESC, p.id DESC LIMIT 30""")
+    picks_rows = c.fetchall()
     conn.close()
-    return "<br>".join(f"id={r[0]} name={r[1]!r} active={r[2]!r} type={r[3]}" for r in rows)
+    out = "<h3>Players</h3>"
+    out += "<br>".join(f"id={r[0]} name={r[1]!r} active={r[2]!r} type={r[3]}" for r in players_rows)
+    out += "<h3>Recent picks (last 30)</h3>"
+    out += "<br>".join(f"pick_id={r[0]} player_id={r[1]} fixture={r[2]!r} tip={r[3]!r} player_name={r[4]!r} active={r[5]!r}" for r in picks_rows)
+    return out
 
 
 @app.route("/leaderboard")
