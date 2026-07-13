@@ -195,7 +195,6 @@
 </head>
 
 <body>
-{% set HIDDEN_NAMES = ['Joza.'] %}
 <div class="window">
     <div class="title-bar" style="padding:12px 18px;">
         <div class="title-bar-text"><span class="app-title">Parovi</span></div>
@@ -292,7 +291,7 @@
             {% if slot.by_player %}
             <div class="picks-grid">
                 {% for pid, player_picks in slot.by_player.items() %}
-                {% if player_picks[0].player_name not in HIDDEN_NAMES %}
+                {% if pid in player_names %}
                 <div class="player-picks-card">
                     <div class="player-picks-header">
                         <i data-lucide="user" style="width:13px;height:13px;color:var(--text-muted);"></i>
@@ -375,14 +374,12 @@
                                 style="min-width:140px; width:100%; max-width:300px; background:var(--surface2) !important; border:1px solid var(--border) !important; border-radius:6px !important; padding:6px 10px !important; font-size:13px !important; color:var(--text) !important;">
                             <option value="" disabled selected>— odaberi —</option>
                             {% for pid, pname in player_names.items() %}
-                            {% if pname not in HIDDEN_NAMES %}
                             <option value="{{ pid }}" data-count="{{ pick_counts.get(pid, 0) }}">
                                 {{ pname }}
                                 {% if pick_counts.get(pid, 0) == 1 %} (1/2)
                                 {% elif pick_counts.get(pid, 0) >= 2 %} ✓ max
                                 {% endif %}
                             </option>
-                            {% endif %}
                             {% endfor %}
                         </select>
                     </div>
@@ -463,7 +460,7 @@
             </div>
             <div class="history-body">
                 {% for pid, player_picks in hs.by_player.items() %}
-                {% if player_picks[0].player_name not in HIDDEN_NAMES %}
+                {% if pid in player_names %}
                 <div class="history-player-row">
                     <strong style="color:var(--text);">{{ player_picks[0].player_name }}</strong>
                     {% for pick in player_picks %}
