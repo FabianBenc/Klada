@@ -1388,6 +1388,18 @@ def manual_ticket():
     )
 
 
+@app.route("/debug/players")
+def debug_players():
+    if not session.get("admin_logged_in"):
+        return "Unauthorized", 403
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT id, name, active, typeof(active) FROM players ORDER BY id")
+    rows = c.fetchall()
+    conn.close()
+    return "<br>".join(f"id={r[0]} name={r[1]!r} active={r[2]!r} type={r[3]}" for r in rows)
+
+
 @app.route("/leaderboard")
 def leaderboard():
     conn = sqlite3.connect(DB_NAME)
@@ -1573,7 +1585,7 @@ def get_current_slot_info():
     else:
         next_monday = (now - timedelta(days=weekday)).replace(hour=0, minute=0, second=0, microsecond=0)
     weekday_opens = next_monday - timedelta(days=1)
-    weekday_locks = next_monday + timedelta(hours=15)
+    weekday_locks = next_monday + timedelta(hours=12)
     weekend_opens = next_monday + timedelta(days=2)
     weekend_locks = next_monday + timedelta(days=4, hours=12)
     iso_year, iso_week, _ = next_monday.isocalendar()
@@ -1624,8 +1636,9 @@ def picks():
         sid = slot_ids[s["slot_type"]]
         c.execute("""SELECT p.id, p.player_id, pl.name, p.fixture, p.tip, p.odds, p.submitted_at
                      FROM picks p
-                     JOIN players pl ON pl.id=p.player_id AND pl.active=1
-                     WHERE p.slot_id=? ORDER BY p.submitted_at ASC""", (sid,))
+                     JOIN players pl ON pl.id=p.player_id
+                     WHERE p.slot_id=? AND pl.active != 0
+                     ORDER BY p.submitted_at ASC""", (sid,))
         by_player = {}
         for row in c.fetchall():
             pid = row[1]
@@ -1645,8 +1658,9 @@ def picks():
         hsid = hs[0]
         c.execute("""SELECT p.id, p.player_id, pl.name, p.fixture, p.tip, p.odds
                      FROM picks p
-                     JOIN players pl ON pl.id=p.player_id AND pl.active=1
-                     WHERE p.slot_id=? ORDER BY p.player_id, p.submitted_at ASC""", (hsid,))
+                     JOIN players pl ON pl.id=p.player_id
+                     WHERE p.slot_id=? AND pl.active != 0
+                     ORDER BY p.player_id, p.submitted_at ASC""", (hsid,))
         by_player = {}
         for row in c.fetchall():
             pid = row[1]
