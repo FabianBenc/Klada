@@ -1573,9 +1573,9 @@ def get_current_slot_info():
     else:
         next_monday = (now - timedelta(days=weekday)).replace(hour=0, minute=0, second=0, microsecond=0)
     weekday_opens = next_monday - timedelta(days=1)
-    weekday_locks = next_monday + timedelta(hours=12)
+    weekday_locks = next_monday + timedelta(hours=15)
     weekend_opens = next_monday + timedelta(days=2)
-    weekend_locks = next_monday + timedelta(days=4, hours=15)
+    weekend_locks = next_monday + timedelta(days=4, hours=12)
     iso_year, iso_week, _ = next_monday.isocalendar()
     base = f"{iso_year}-W{iso_week:02d}"
     return [
@@ -1615,6 +1615,7 @@ def picks():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     player_names = get_active_player_names(conn)
+    active_ids = set(player_names.keys())
     slots = get_current_slot_info()
     slot_ids = ensure_slots_exist(c, slots, now_str)
     conn.commit()
@@ -1627,6 +1628,8 @@ def picks():
         by_player = {}
         for row in c.fetchall():
             pid = row[1]
+            if pid not in active_ids:
+                continue  # skip inactive players
             if pid not in by_player: by_player[pid] = []
             by_player[pid].append({"id": row[0], "player_id": pid, "player_name": row[2],
                                    "fixture": row[3], "tip": row[4], "odds": row[5], "submitted_at": row[6]})
@@ -1647,6 +1650,8 @@ def picks():
         by_player = {}
         for row in c.fetchall():
             pid = row[1]
+            if pid not in active_ids:
+                continue  # skip inactive players in history too
             if pid not in by_player: by_player[pid] = []
             by_player[pid].append({"id": row[0], "player_id": pid, "player_name": row[2],
                                    "fixture": row[3], "tip": row[4], "odds": row[5]})
