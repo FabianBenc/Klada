@@ -68,8 +68,6 @@
 </head>
 
 {% macro render_tab(rows, payments, tab_id, title='', start_date='') %}
-{% set rows = rows | rejectattr('name', 'in', ['Joza.']) | list %}
-{% set payments = payments | rejectattr('name', 'in', ['Joza.']) | list %}
 <div>
     {% if title %}
     <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:4px;">
@@ -82,9 +80,6 @@
     <p class="sort-note">
         Poredak: <strong>1.</strong> broj pogodaka &nbsp;›&nbsp;
         <strong>2.</strong> prosječni tečaj (tiebreak).
-        &nbsp;·&nbsp; Score: <strong>+1+tečaj</strong> pogodak &nbsp;·&nbsp;
-        <strong>+tečaj</strong> poništen &nbsp;·&nbsp;
-        <strong>−1−tečaj</strong> promašaj.
     </p>
 
     <div class="table-wrap" style="margin-bottom:20px;">
@@ -96,7 +91,6 @@
                     <th><i data-lucide="check-circle-2" style="width:13px;height:13px;color:#4ade80;vertical-align:middle;"></i></th>
                     <th><i data-lucide="x-circle" style="width:13px;height:13px;color:var(--red);vertical-align:middle;"></i></th>
                     <th class="hide-mobile" title="Broj poništenih parova"><i data-lucide="minus-circle" style="width:13px;height:13px;color:var(--text-muted);vertical-align:middle;margin-right:3px;"></i></th>
-                    <th title="Score: +1+tečaj pogodak · +tečaj poništen · −1−tečaj promašaj">Score</th>
                     <th class="hide-mobile">Prosj. tečaj</th>
                     <th class="hide-mobile">Najveći tečaj</th>
                     <th><i data-lucide="flame" style="width:13px;height:13px;color:var(--accent);vertical-align:middle;margin-right:3px;"></i>Niz</th>
@@ -118,9 +112,6 @@
                     <td class="hide-mobile" style="color:var(--text-muted);">
                         {% if player.voided > 0 %}<span style="color:var(--text-muted);">{{ player.voided }}</span>
                         {% else %}–{% endif %}
-                    </td>
-                    <td style="font-weight:700; color:{% if player.score_pts >= 0 %}var(--accent){% else %}var(--red){% endif %};">
-                        {% if player.score_pts >= 0 %}+{% endif %}{{ player.score_pts }}
                     </td>
                     <td class="hide-mobile" style="color:var(--text-muted);">{{ player.avg_odds }}</td>
                     <td class="hide-mobile" style="color:var(--accent);">{{ player.max_win }}</td>
@@ -203,9 +194,6 @@
         <a href="/pravila"     class="menu-item" style="text-decoration:none;"><i data-lucide="scroll-text" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Pravila</a>
         <a href="/players"     class="menu-item" style="text-decoration:none;"><i data-lucide="users"       style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Igrači</a>
         <a href="/picks"       class="menu-item" style="text-decoration:none;"><i data-lucide="pencil-line" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Parovi</a>
-        {% if admin_logged_in %}
-        <a href="/update" class="menu-item" style="text-decoration:none; color:var(--accent);"><i data-lucide="refresh-cw" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Ažuriraj</a>
-        {% endif %}
         <div class="menu-item" id="adminMenuBtn" onclick="toggleAdminMenu()" style="margin-left:auto; cursor:pointer; user-select:none;">
             {% if admin_logged_in %}
             <span style="color:var(--green);"><i data-lucide="shield-check" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Admin ▾</span>
@@ -356,9 +344,7 @@
                 const canvas = document.getElementById('chart-' + tabId);
                 if (!canvas) return;
 
-                const datasets = data.datasets
-                    .filter(ds => ds.label !== 'Joza.')
-                    .map((ds, i) => ({
+                const datasets = data.datasets.map((ds, i) => ({
                     label: ds.label,
                     data: ds.data,
                     borderColor: COLORS[i % COLORS.length],

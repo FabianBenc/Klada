@@ -206,9 +206,6 @@
         <a href="/pravila"     class="menu-item" style="text-decoration:none;"><i data-lucide="scroll-text" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Pravila</a>
         <a href="/players"     class="menu-item" style="text-decoration:none;"><i data-lucide="users"       style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Igrači</a>
         <a href="/picks"       class="menu-item" style="text-decoration:none;"><i data-lucide="pencil-line" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Parovi</a>
-        {% if admin_logged_in %}
-        <a href="/update" class="menu-item" style="text-decoration:none; color:var(--accent);"><i data-lucide="refresh-cw" style="width:13px;height:13px;margin-right:5px;vertical-align:middle;"></i>Ažuriraj</a>
-        {% endif %}
         <div class="menu-item" id="adminMenuBtn" onclick="toggleAdminMenu()" style="margin-left:auto; cursor:pointer; user-select:none;">
             {% if admin_logged_in %}
             <span style="color:var(--green);"><i data-lucide="shield-check" style="width:13px;height:13px;margin-right:4px;vertical-align:middle;"></i>Admin ▾</span>
@@ -239,6 +236,13 @@
             Slot je zatvoren — više nije moguće slati parove.
         </div>
         {% endif %}
+        {% if request.args.get('error') == 'max_reserve' %}
+        <div style="background:rgba(229,115,115,0.12); border:1px solid rgba(229,115,115,0.3); border-radius:6px;
+                    padding:10px 14px; margin-bottom:14px; color:var(--red); font-size:13px; display:flex; align-items:center; gap:8px;">
+            <i data-lucide="alert-circle" style="width:14px;height:14px;flex-shrink:0;"></i>
+            Ovaj igrač je već prijavio 2 rezervna para — maksimum dostignut.
+        </div>
+        {% endif %}
         {% if request.args.get('error') == 'max' %}
         <div style="background:rgba(229,115,115,0.12); border:1px solid rgba(229,115,115,0.3); border-radius:6px;
                     padding:10px 14px; margin-bottom:14px; color:var(--red); font-size:13px; display:flex; align-items:center; gap:8px;">
@@ -254,10 +258,10 @@
                 i ne možete prijavljivati parove koji igraju taj ponedjeljak
             </span>
             <span>
-                Vikend: zatvara se <strong style="color:var(--text);">petak u 12:00</strong>
+                Vikend: zatvara se <strong style="color:var(--text);">petak u 15:00</strong>
             </span>
             <span>
-                Svaki igrač može prijaviti <strong style="color:var(--text);">1 ili 2 para</strong>
+                Svaki igrač može prijaviti <strong style="color:var(--text);">1 ili 2 para</strong> plus do <strong style="color:var(--text);">2 rezervna para</strong>
             </span>
         </div>
 
@@ -296,11 +300,15 @@
                     <div class="player-picks-header">
                         <i data-lucide="user" style="width:13px;height:13px;color:var(--text-muted);"></i>
                         <span class="pname">{{ player_picks[0].player_name }}</span>
-                        <span class="pcount">{{ player_picks|length }} par{% if player_picks|length > 1 %}a{% endif %}</span>
+                        {% set main_n = player_picks|rejectattr('is_reserve')|list|length %}
+                        {% set res_n = player_picks|length - main_n %}
+                        <span class="pcount">{{ main_n }} par{% if main_n != 1 %}a{% endif %}{% if res_n %} + {{ res_n }} rez.{% endif %}</span>
                     </div>
                     {% for pick in player_picks %}
-                    <div class="pick-row">
-                        <div class="pick-fixture">{{ pick.fixture }}</div>
+                    <div class="pick-row"{% if pick.is_reserve %} style="opacity:0.85; border-left:2px dashed var(--text-muted); padding-left:8px;"{% endif %}>
+                        <div class="pick-fixture">{{ pick.fixture }}
+                            {% if pick.is_reserve %}<span style="background:rgba(255,193,7,0.15); color:#ffc107; border-radius:3px; padding:0 5px; font-size:10px; font-weight:700; margin-left:4px;">REZERVA</span>{% endif %}
+                        </div>
                         <div class="pick-detail">
                             <span class="pick-tip">{{ pick.tip }}</span>
                             {% if pick.odds %}<span class="pick-odds">{{ pick.odds }}</span>{% endif %}
@@ -359,26 +367,30 @@
 
                 {# Count how many picks each player already has for this slot #}
                 {% set pick_counts = {} %}
+                {% set reserve_counts = {} %}
                 {% for pid, player_picks in slot.by_player.items() %}
-                    {% if pick_counts.update({pid: player_picks|length}) %}{% endif %}
+                    {% set rn = player_picks|selectattr('is_reserve')|list|length %}
+                    {% if pick_counts.update({pid: player_picks|length - rn}) %}{% endif %}
+                    {% if reserve_counts.update({pid: rn}) %}{% endif %}
                 {% endfor %}
 
-                <form method="POST" action="/picks/submit" id="form-{{ slot.slot_id }}" onchange="updatePickCount(this)">
+                <form method="POST" action="/picks/submit" id="form-{{ slot.slot_id }}"
+                      data-slot="{{ slot.slot_id }}"
+                      data-main='{{ pick_counts | tojson }}'
+                      data-reserve='{{ reserve_counts | tojson }}'
+                      data-fixed-player="{% if current_player_id and not admin_logged_in %}{{ current_player_id }}{% endif %}"
+                      onchange="refreshLimits({{ slot.slot_id }})">
                     <input type="hidden" name="slot_id" value="{{ slot.slot_id }}">
 
                     {% if admin_logged_in %}
                     <div class="player-select-row">
                         <label>Igrač:</label>
                         <select name="player_id" required id="player-select-{{ slot.slot_id }}"
-                                onchange="checkPlayerLimit(this, {{ slot.slot_id }}, {{ pick_counts | tojson }})"
-                                style="min-width:140px; width:100%; max-width:300px; background:var(--surface2) !important; border:1px solid var(--border) !important; border-radius:6px !important; padding:6px 10px !important; font-size:13px !important; color:var(--text) !important;">
+                                                                style="min-width:140px; width:100%; max-width:300px; background:var(--surface2) !important; border:1px solid var(--border) !important; border-radius:6px !important; padding:6px 10px !important; font-size:13px !important; color:var(--text) !important;">
                             <option value="" disabled selected>— odaberi —</option>
                             {% for pid, pname in player_names.items() %}
-                            <option value="{{ pid }}" data-count="{{ pick_counts.get(pid, 0) }}">
-                                {{ pname }}
-                                {% if pick_counts.get(pid, 0) == 1 %} (1/2)
-                                {% elif pick_counts.get(pid, 0) >= 2 %} ✓ max
-                                {% endif %}
+                            <option value="{{ pid }}">
+                                {{ pname }} ({{ pick_counts.get(pid, 0) }}/2{% if reserve_counts.get(pid, 0) %}, rez. {{ reserve_counts.get(pid, 0) }}/2{% endif %})
                             </option>
                             {% endfor %}
                         </select>
@@ -388,7 +400,8 @@
                         <label>Igrač:</label>
                         <span style="font-weight:600; color:var(--accent);">{{ current_player_name }}</span>
                         {% set my_count = pick_counts.get(current_player_id, 0) %}
-                        {% if my_count > 0 %}<span class="period-badge" style="margin-left:8px;">{{ my_count }}/2</span>{% endif %}
+                        <span class="period-badge" style="margin-left:8px;">{{ my_count }}/2</span>
+                        {% if reserve_counts.get(current_player_id, 0) > 0 %}<span class="period-badge" style="margin-left:4px;">rez. {{ reserve_counts.get(current_player_id, 0) }}/2</span>{% endif %}
                     </div>
                     {% else %}
                     <div style="background:rgba(0,173,181,0.08); border:1px solid rgba(0,173,181,0.25);
@@ -403,15 +416,24 @@
                     <input type="hidden" name="player_id" value="{{ current_player_id }}">
                     {% endif %}
 
+                    <div class="player-select-row" style="gap:14px;">
+                        <label>Vrsta:</label>
+                        <label style="display:inline-flex; align-items:center; gap:4px; cursor:pointer;">
+                            <input type="radio" name="is_reserve" value="0" checked> Glavni par
+                        </label>
+                        <label style="display:inline-flex; align-items:center; gap:4px; cursor:pointer;">
+                            <input type="radio" name="is_reserve" value="1"> Rezerva
+                        </label>
+                    </div>
+
                     <div id="limit-warning-{{ slot.slot_id }}"
                          style="display:none; background:rgba(229,115,115,0.1); border:1px solid rgba(229,115,115,0.3);
                                 border-radius:6px; padding:8px 12px; margin-bottom:10px; font-size:12px; color:var(--red);">
                         <i data-lucide="alert-circle" style="width:12px;height:12px;vertical-align:middle;margin-right:4px;"></i>
-                        Ovaj igrač je već prijavio 2 para — maksimum dostignut.
+                        <span id="limit-text-{{ slot.slot_id }}">Maksimum dostignut.</span>
                     </div>
 
-                    <div id="pick-form-fields-{{ slot.slot_id }}"
-                         {% if current_player_id and not admin_logged_in and pick_counts.get(current_player_id, 0) >= 2 %}style="display:none;"{% endif %}>
+                    <div id="pick-form-fields-{{ slot.slot_id }}">
                         <div class="pick-input-row">
                             <input type="text" name="fixture"
                                    placeholder="Utakmica (npr. Arsenal - Chelsea)" required>
@@ -422,8 +444,7 @@
                         </div>
                     </div>
 
-                    <div style="display:flex; justify-content:flex-end; margin-top:4px;" id="submit-btn-{{ slot.slot_id }}"
-                         {% if current_player_id and not admin_logged_in and pick_counts.get(current_player_id, 0) >= 2 %}style="display:none;"{% endif %}>
+                    <div style="display:flex; justify-content:flex-end; margin-top:4px;" id="submit-btn-{{ slot.slot_id }}">
                         <button type="submit" style="width:100%;">
                             <i data-lucide="check" style="width:13px;height:13px;vertical-align:middle;margin-right:4px;"></i>
                             Dodaj par
@@ -466,6 +487,7 @@
                     {% for pick in player_picks %}
                     <div style="padding:3px 0 3px 14px; font-size:12px; color:var(--text-muted);">
                         <span style="color:var(--text);">{{ pick.fixture }}</span>
+                        {% if pick.is_reserve %}<span style="background:rgba(255,193,7,0.15); color:#ffc107; border-radius:3px; padding:0 5px; font-size:10px; font-weight:700;">REZERVA</span>{% endif %}
                         &nbsp;
                         <span style="background:rgba(0,173,181,0.1); color:var(--accent); border-radius:3px; padding:0 5px; font-weight:700;">{{ pick.tip }}</span>
                         {% if pick.odds %}<span style="color:var(--text-muted);">@ {{ pick.odds }}</span>{% endif %}
@@ -511,24 +533,32 @@
         if (dd && btn && !btn.contains(e.target)) dd.style.display = 'none';
     });
 
-    // ── Player pick limit check ─────────────────────────────────────────────
-    function checkPlayerLimit(select, slotId, pickCounts) {
-        const pid = parseInt(select.value);
-        const count = pickCounts[pid] || 0;
+    // ── Player pick limit check (2 main + 2 reserve per player) ─────────────
+    function refreshLimits(slotId) {
+        const form = document.getElementById('form-' + slotId);
+        if (!form) return;
+        const main = JSON.parse(form.dataset.main || '{}');
+        const reserve = JSON.parse(form.dataset.reserve || '{}');
+        const sel = form.querySelector('select[name="player_id"]');
+        const pid = sel ? sel.value : form.dataset.fixedPlayer;
+        const isRes = (form.querySelector('input[name="is_reserve"]:checked') || {}).value === '1';
         const warning = document.getElementById('limit-warning-' + slotId);
+        const text    = document.getElementById('limit-text-' + slotId);
         const fields  = document.getElementById('pick-form-fields-' + slotId);
         const btn     = document.getElementById('submit-btn-' + slotId);
-        if (count >= 2) {
-            warning.style.display = 'block';
-            fields.style.display  = 'none';
-            btn.style.display     = 'none';
-        } else {
-            warning.style.display = 'none';
-            fields.style.display  = 'block';
-            btn.style.display     = 'flex';
-        }
+        const count = pid ? ((isRes ? reserve : main)[pid] || 0) : 0;
+        const full = count >= 2;
+        if (text) text.textContent = isRes
+            ? 'Ovaj igrač je već prijavio 2 rezervna para — maksimum dostignut.'
+            : 'Ovaj igrač je već prijavio 2 glavna para — maksimum dostignut.';
+        warning.style.display = full ? 'block' : 'none';
+        fields.style.display  = full ? 'none' : 'block';
+        btn.style.display     = full ? 'none' : 'flex';
         lucide.createIcons();
     }
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('form[data-slot]').forEach(f => refreshLimits(f.dataset.slot));
+    });
 
     // ── Countdown timers ────────────────────────────────────────────────────
     function updateCountdowns() {

@@ -258,6 +258,11 @@ def init_db():
         player_id INTEGER NOT NULL REFERENCES players(id),
         fixture TEXT NOT NULL, tip TEXT NOT NULL, odds REAL, submitted_at TEXT NOT NULL)""")
 
+    # Migrate: reserve legs flag
+    pick_cols = [r[1] for r in c.execute("PRAGMA table_info(picks)").fetchall()]
+    if "is_reserve" not in pick_cols:
+        c.execute("ALTER TABLE picks ADD COLUMN is_reserve INTEGER NOT NULL DEFAULT 0")
+
     # Pending change requests from players (no login required to submit)
     c.execute("""CREATE TABLE IF NOT EXISTS pick_change_requests (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -811,6 +816,9 @@ def remove_player(player_id):
 # Routes: Main index
 # ---------------------------------------------------------------------------
 
+TICKETS_PER_PAGE = 5
+
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     submit_error = None
@@ -839,13 +847,45 @@ def index():
         SELECT ticket_id, ticket_number, created_at, last_updated, ticket_result, ticket_jwt, period_id
         FROM tickets ORDER BY id DESC
     """)
-    tickets = c.fetchall()
+    all_tickets = c.fetchall()
 
     c.execute("""
         SELECT ticket_id, player, fixture_name, odds, result, id, start_time, score
         FROM bets ORDER BY ticket_id, player
     """)
-    bets = c.fetchall()
+    all_bets = c.fetchall()
+
+    # ── Server-side search / filter / pagination (TICKETS_PER_PAGE per page) ──
+    search_q = (request.args.get("q") or "").strip()
+    status_filter = request.args.get("f", "ALL")
+    if status_filter not in ("ALL", "WINNING", "LOSING", "PENDING"):
+        status_filter = "ALL"
+
+    names_for_search = get_player_names()
+    bets_by_ticket = {}
+    for b in all_bets:
+        bets_by_ticket.setdefault(b[0], []).append(b)
+
+    filtered = []
+    words = search_q.lower().split()
+    for t in all_tickets:
+        if status_filter != "ALL" and normalize_result(t[4]) != status_filter:
+            continue
+        if words:
+            hay = (str(t[1] or "") + " " + " ".join(
+                f"{names_for_search.get(b[1], '')} {b[2] or ''}" for b in bets_by_ticket.get(t[0], []))).lower()
+            if not all(w in hay for w in words):
+                continue
+        filtered.append(t)
+
+    total_tickets = len(filtered)
+    total_pages = max(1, -(-total_tickets // TICKETS_PER_PAGE))
+    page = request.args.get("page", 1, type=int) or 1
+    page = min(max(page, 1), total_pages)
+    start = (page - 1) * TICKETS_PER_PAGE
+    tickets = filtered[start:start + TICKETS_PER_PAGE]
+    page_ids = {t[0] for t in tickets}
+    bets = [b for b in all_bets if b[0] in page_ids]
 
     # Periods for the period banner on the index page
     c.execute("SELECT id, name, start_date FROM periods ORDER BY start_date DESC")
@@ -868,6 +908,8 @@ def index():
         periods=periods,
         period_ids=period_ids,
         submit_error=submit_error,
+        page=page, total_pages=total_pages, total_tickets=total_tickets,
+        search_q=search_q, status_filter=status_filter,
         current_player_id=session.get("player_logged_in_id"),
         current_player_name=session.get("player_logged_in_name"),
     )
@@ -1611,11 +1653,17 @@ def get_current_slot_info():
     else:
         next_monday = (now - timedelta(days=weekday)).replace(hour=0, minute=0, second=0, microsecond=0)
     weekday_opens = next_monday - timedelta(days=1)
-    weekday_locks = next_monday + timedelta(hours=15)
+    weekday_locks = next_monday + timedelta(hours=12)
     weekend_opens = next_monday + timedelta(days=2)
     weekend_locks = next_monday + timedelta(days=4, hours=12)
     iso_year, iso_week, _ = next_monday.isocalendar()
     base = f"{iso_year}-W{iso_week:02d}"
+    # TEST MODE: start the service with env var SLOTS_TEST_OPEN=1 to keep both slots
+    # open for 4 hours from now (for testing outside the normal window).
+    # Remove the variable and restart to go back to the normal schedule.
+    if os.environ.get("SLOTS_TEST_OPEN") == "1":
+        weekday_opens = weekend_opens = now - timedelta(minutes=1)
+        weekday_locks = weekend_locks = now + timedelta(hours=4)
     return [
         {"slot_type": "weekday", "week_label": f"{base}-weekday",
          "opens_at": weekday_opens.strftime("%Y-%m-%d %H:%M"),
@@ -1639,6 +1687,9 @@ def ensure_slots_exist(c, slots, now_str):
         row = c.fetchone()
         if row:
             slot_ids[s["slot_type"]] = row[0]
+            # keep stored times in sync (needed for test mode, and restores them afterwards)
+            c.execute("UPDATE pick_slots SET opens_at=?, locks_at=? WHERE id=?",
+                      (s["opens_at"], s["locks_at"], row[0]))
         else:
             c.execute("INSERT INTO pick_slots (slot_type,week_label,opens_at,locks_at,created_at) VALUES (?,?,?,?,?)",
                       (s["slot_type"], s["week_label"], s["opens_at"], s["locks_at"], now_str))
@@ -1660,17 +1711,18 @@ def picks():
     slot_data = []
     for s in slots:
         sid = slot_ids[s["slot_type"]]
-        c.execute("""SELECT p.id, p.player_id, pl.name, p.fixture, p.tip, p.odds, p.submitted_at
+        c.execute("""SELECT p.id, p.player_id, pl.name, p.fixture, p.tip, p.odds, p.submitted_at, p.is_reserve
                      FROM picks p
                      JOIN players pl ON pl.id=p.player_id
                      WHERE p.slot_id=? AND pl.active != 0
-                     ORDER BY p.submitted_at ASC""", (sid,))
+                     ORDER BY p.is_reserve ASC, p.submitted_at ASC""", (sid,))
         by_player = {}
         for row in c.fetchall():
             pid = row[1]
             if pid not in by_player: by_player[pid] = []
             by_player[pid].append({"id": row[0], "player_id": pid, "player_name": row[2],
-                                   "fixture": row[3], "tip": row[4], "odds": row[5], "submitted_at": row[6]})
+                                   "fixture": row[3], "tip": row[4], "odds": row[5], "submitted_at": row[6],
+                                   "is_reserve": bool(row[7])})
         slot_data.append({**s, "slot_id": sid, "by_player": by_player})
     current_ids = list(slot_ids.values())
     ph = ",".join("?" * len(current_ids))
@@ -1682,17 +1734,18 @@ def picks():
     history = []
     for hs in c.fetchall():
         hsid = hs[0]
-        c.execute("""SELECT p.id, p.player_id, pl.name, p.fixture, p.tip, p.odds
+        c.execute("""SELECT p.id, p.player_id, pl.name, p.fixture, p.tip, p.odds, p.is_reserve
                      FROM picks p
                      JOIN players pl ON pl.id=p.player_id
                      WHERE p.slot_id=? AND pl.active != 0
-                     ORDER BY p.player_id, p.submitted_at ASC""", (hsid,))
+                     ORDER BY p.player_id, p.is_reserve ASC, p.submitted_at ASC""", (hsid,))
         by_player = {}
         for row in c.fetchall():
             pid = row[1]
             if pid not in by_player: by_player[pid] = []
             by_player[pid].append({"id": row[0], "player_id": pid, "player_name": row[2],
-                                   "fixture": row[3], "tip": row[4], "odds": row[5]})
+                                   "fixture": row[3], "tip": row[4], "odds": row[5],
+                                   "is_reserve": bool(row[6])})
         history.append({"slot_id": hsid, "slot_type": hs[1], "week_label": hs[2],
                         "locks_at": hs[3], "player_count": hs[4], "pick_count": hs[5], "by_player": by_player})
     conn.close()
@@ -1721,6 +1774,7 @@ def picks_submit():
         return redirect("/player_login")
 
     slot_id   = request.form.get("slot_id", type=int)
+    is_reserve = 1 if request.form.get("is_reserve") in ("1", "true", "on") else 0
     fixture   = request.form.get("fixture", "").strip()
     tip       = request.form.get("tip", "").strip()
     try:
@@ -1736,12 +1790,13 @@ def picks_submit():
     if not row or now_str >= row[0]:
         conn.close()
         return redirect("/picks?error=locked")
-    c.execute("SELECT COUNT(*) FROM picks WHERE slot_id=? AND player_id=?", (slot_id, player_id))
+    c.execute("SELECT COUNT(*) FROM picks WHERE slot_id=? AND player_id=? AND is_reserve=?",
+              (slot_id, player_id, is_reserve))
     if c.fetchone()[0] >= 2:
         conn.close()
-        return redirect("/picks?error=max")
-    c.execute("INSERT INTO picks (slot_id,player_id,fixture,tip,odds,submitted_at) VALUES (?,?,?,?,?,?)",
-              (slot_id, player_id, fixture, tip, odds, now_str))
+        return redirect("/picks?error=max_reserve" if is_reserve else "/picks?error=max")
+    c.execute("INSERT INTO picks (slot_id,player_id,fixture,tip,odds,submitted_at,is_reserve) VALUES (?,?,?,?,?,?,?)",
+              (slot_id, player_id, fixture, tip, odds, now_str, is_reserve))
     conn.commit()
     conn.close()
     return redirect("/picks")
@@ -1943,12 +1998,12 @@ def api_picks_for_slot(slot_id):
 
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("""SELECT p.id, p.player_id, pl.name, p.fixture, p.tip, p.odds, p.submitted_at
+    c.execute("""SELECT p.id, p.player_id, pl.name, p.fixture, p.tip, p.odds, p.submitted_at, p.is_reserve
                  FROM picks p JOIN players pl ON pl.id=p.player_id
                  WHERE p.slot_id=? ORDER BY p.submitted_at ASC""", (slot_id,))
     picks_list = [
         {"id": r[0], "player_id": r[1], "player_name": r[2], "fixture": r[3],
-         "tip": r[4], "odds": r[5], "submitted_at": r[6]}
+         "tip": r[4], "odds": r[5], "submitted_at": r[6], "is_reserve": bool(r[7])}
         for r in c.fetchall()
     ]
     conn.close()
