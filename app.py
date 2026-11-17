@@ -265,6 +265,26 @@ def init_db():
     if "is_reserve" not in pick_cols:
         c.execute("ALTER TABLE picks ADD COLUMN is_reserve INTEGER NOT NULL DEFAULT 0")
 
+    # Web Push: one row per subscribed browser/device
+    c.execute("""CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        endpoint TEXT NOT NULL UNIQUE,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        is_admin INTEGER NOT NULL DEFAULT 0,
+        player_id INTEGER REFERENCES players(id),
+        pref_all INTEGER NOT NULL DEFAULT 1,       -- admin: "everyone has submitted"
+        pref_closing INTEGER NOT NULL DEFAULT 1,   -- player: "slot closes soon"
+        created_at TEXT NOT NULL)""")
+    # Remembers which notifications were already sent (so nobody gets the same one twice)
+    c.execute("""CREATE TABLE IF NOT EXISTS push_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        kind TEXT NOT NULL,
+        slot_id INTEGER NOT NULL,
+        player_id INTEGER NOT NULL DEFAULT 0,
+        sent_at TEXT NOT NULL,
+        UNIQUE(kind, slot_id, player_id))""")
+
     # Pending change requests from players (no login required to submit)
     c.execute("""CREATE TABLE IF NOT EXISTS pick_change_requests (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1849,6 +1869,8 @@ def picks_submit():
               (slot_id, player_id, fixture, tip, odds, now_str, is_reserve))
     conn.commit()
     conn.close()
+    if not is_reserve:
+        _bg(notify_admin_if_all_submitted, slot_id)
     return redirect("/picks")
 
 
@@ -1926,7 +1948,12 @@ def picks_delete(pick_id):
             conn.close()
             return redirect("/picks?error=locked")
 
+    c.execute("SELECT slot_id FROM picks WHERE id=?", (pick_id,))
+    _row = c.fetchone()
     c.execute("DELETE FROM picks WHERE id=?", (pick_id,))
+    if _row:
+        # slot may no longer be complete -> allow the "everyone submitted" notice to fire again
+        c.execute("DELETE FROM push_log WHERE kind='all_submitted' AND slot_id=?", (_row[0],))
     conn.commit()
     conn.close()
     return redirect("/picks")
@@ -2219,11 +2246,343 @@ def picks_change_request():
 
 
 # ---------------------------------------------------------------------------
+# Web Push notifications
+#   • admin  -> "all players have submitted" (sent the moment the last player submits)
+#   • player -> "slot closes soon" reminders (3 h and 1 h before; run push_cron.py via cron)
+# ---------------------------------------------------------------------------
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+VAPID_PRIVATE_PEM = os.environ.get("VAPID_PRIVATE_KEY_FILE", os.path.join(BASE_DIR, "vapid_private.pem"))
+VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "mailto:admin@klada.fabianbenc.com")
+
+# Only real browser push services are accepted as endpoints (prevents the server being
+# pointed at internal addresses). Set PUSH_ALLOW_ANY_ENDPOINT=1 for local testing only.
+PUSH_HOST_SUFFIXES = (
+    "fcm.googleapis.com", "android.googleapis.com",          # Chrome / Edge / Android
+    "push.services.mozilla.com",                              # Firefox
+    "push.apple.com",                                         # Safari / iOS
+    "notify.windows.com",                                     # legacy Edge / Windows
+)
+
+
+def _vapid():
+    from py_vapid import Vapid
+    if not os.path.exists(VAPID_PRIVATE_PEM):
+        v = Vapid()
+        v.generate_keys()
+        v.save_key(VAPID_PRIVATE_PEM)
+        try:
+            os.chmod(VAPID_PRIVATE_PEM, 0o600)
+        except OSError:
+            pass
+    return Vapid.from_file(VAPID_PRIVATE_PEM)
+
+
+def vapid_public_key():
+    """URL-safe base64 public key, as the browser's pushManager.subscribe() wants it."""
+    import base64
+    from cryptography.hazmat.primitives import serialization
+    raw = _vapid().public_key.public_bytes(serialization.Encoding.X962,
+                                           serialization.PublicFormat.UncompressedPoint)
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+
+def _endpoint_allowed(endpoint):
+    if os.environ.get("PUSH_ALLOW_ANY_ENDPOINT") == "1":
+        return True
+    try:
+        u = urlparse(endpoint)
+    except Exception:
+        return False
+    host = (u.hostname or "").lower()
+    return u.scheme == "https" and any(host == h or host.endswith("." + h) for h in PUSH_HOST_SUFFIXES)
+
+
+def _send_push_raw(sub, payload):
+    """sub = (endpoint, p256dh, auth). Returns 'ok', 'gone' (subscription expired) or 'error'."""
+    import json
+    from pywebpush import webpush, WebPushException
+    try:
+        webpush(
+            subscription_info={"endpoint": sub[0], "keys": {"p256dh": sub[1], "auth": sub[2]}},
+            data=json.dumps(payload),
+            vapid_private_key=VAPID_PRIVATE_PEM,
+            vapid_claims={"sub": VAPID_SUBJECT},
+            ttl=3600,
+        )
+        return "ok"
+    except WebPushException as e:
+        code = getattr(getattr(e, "response", None), "status_code", None)
+        if code in (404, 410):
+            return "gone"
+        print("[push] send failed:", code, str(e)[:200])
+        return "error"
+    except Exception as e:
+        print("[push] send failed:", repr(e)[:200])
+        return "error"
+
+
+push_sender = _send_push_raw   # replaceable in tests
+
+
+def send_push(rows, payload):
+    """rows: [(id, endpoint, p256dh, auth)]. Removes subscriptions the push service says are gone."""
+    sent, gone = 0, []
+    for sid, endpoint, p256dh, auth in rows:
+        res = push_sender((endpoint, p256dh, auth), payload)
+        if res == "ok":
+            sent += 1
+        elif res == "gone":
+            gone.append(sid)
+    if gone:
+        conn = sqlite3.connect(DB_NAME)
+        conn.executemany("DELETE FROM push_subscriptions WHERE id=?", [(i,) for i in gone])
+        conn.commit()
+        conn.close()
+    return sent
+
+
+def _bg(fn, *args):
+    """Run slow work (network calls) off the request thread."""
+    threading.Thread(target=fn, args=args, daemon=True).start()
+
+
+def _claim(c, kind, slot_id, player_id=0):
+    """True only the first time (kind, slot, player) is claimed - guards against duplicate sends."""
+    c.execute("INSERT OR IGNORE INTO push_log (kind, slot_id, player_id, sent_at) VALUES (?,?,?,?)",
+              (kind, slot_id, player_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+    return c.rowcount == 1
+
+
+def _slot_label(slot_type):
+    return "Radni tjedan" if slot_type == "weekday" else "Vikend"
+
+
+def notify_admin_if_all_submitted(slot_id):
+    """Called after every new main pick. Notifies admin once when every active player has >= 1 pair."""
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT slot_type, locks_at FROM pick_slots WHERE id=?", (slot_id,))
+    slot = c.fetchone()
+    if not slot or datetime.now().strftime("%Y-%m-%d %H:%M") >= slot[1]:
+        conn.close()
+        return 0
+    active = get_active_player_names(conn)
+    if not active:
+        conn.close()
+        return 0
+    c.execute("SELECT player_id, COUNT(*) FROM picks WHERE slot_id=? AND is_reserve=0 GROUP BY player_id", (slot_id,))
+    counts = {r[0]: r[1] for r in c.fetchall()}
+    if any(counts.get(pid, 0) < 1 for pid in active):
+        conn.close()
+        return 0
+    if not _claim(c, "all_submitted", slot_id):
+        conn.commit()
+        conn.close()
+        return 0
+    conn.commit()
+    total = sum(counts.get(pid, 0) for pid in active)
+    c.execute("SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE is_admin=1 AND pref_all=1")
+    rows = c.fetchall()
+    conn.close()
+    if not rows:
+        return 0
+    return send_push(rows, {
+        "title": "Svi su predali parove ✅",
+        "body": f"{_slot_label(slot[0])}: {len(active)} igrača, {total} parova spremno za tiket.",
+        "url": "/picks", "tag": f"all-{slot_id}",
+    })
+
+
+def send_closing_reminders(now=None):
+    """Run every ~10 min from cron. For each open slot closing within 3 h (and again within 1 h),
+    reminds active players who have fewer than 2 main pairs and enabled reminders."""
+    now = now or datetime.now()
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    slots = get_current_slot_info()
+    slot_ids = ensure_slots_exist(c, slots, now.strftime("%Y-%m-%d %H:%M"))
+    conn.commit()
+    active = get_active_player_names(conn)
+    total_sent = 0
+    for s in slots:
+        locks = datetime.strptime(s["locks_at"], "%Y-%m-%d %H:%M")
+        opens = datetime.strptime(s["opens_at"], "%Y-%m-%d %H:%M")
+        remaining = locks - now
+        if now < opens or remaining <= timedelta(0):
+            continue
+        if remaining <= timedelta(hours=1):
+            stage, title = "closing_1h", "⏰ Parovi: zatvara se za manje od sat vremena"
+        elif remaining <= timedelta(hours=3):
+            stage, title = "closing_3h", "⏰ Parovi: zatvaranje za 3 sata"
+        else:
+            continue
+        sid = slot_ids[s["slot_type"]]
+        c.execute("SELECT player_id, COUNT(*) FROM picks WHERE slot_id=? AND is_reserve=0 GROUP BY player_id", (sid,))
+        counts = {r[0]: r[1] for r in c.fetchall()}
+        for pid in active:
+            have = counts.get(pid, 0)
+            if have >= 2:
+                continue
+            c.execute("SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE player_id=? AND pref_closing=1", (pid,))
+            rows = c.fetchall()
+            if not rows or not _claim(c, stage, sid, pid):
+                continue
+            conn.commit()
+            closes = locks.strftime("%H:%M")
+            if have == 0:
+                body = f"{_slot_label(s['slot_type'])}: još nisi prijavio/la nijedan par. Zatvara se u {closes}."
+            else:
+                body = f"{_slot_label(s['slot_type'])}: imaš {have}/2 para. Zatvara se u {closes}."
+            total_sent += send_push(rows, {"title": title, "body": body, "url": "/picks", "tag": f"closing-{sid}"})
+    conn.commit()
+    conn.close()
+    return total_sent
+
+
+def _push_owner():
+    if session.get("admin_logged_in"):
+        return "admin", None
+    pid = current_player_id()
+    if pid:
+        return "player", pid
+    return None, None
+
+
+def _json_body():
+    if not request.is_json:        # a cross-site form post can't send JSON, so this doubles as CSRF protection
+        return None
+    return request.get_json(silent=True) or {}
+
+
+@app.route("/push/public-key")
+def push_public_key():
+    return jsonify({"key": vapid_public_key()})
+
+
+@app.route("/push/status")
+def push_status():
+    role, pid = _push_owner()
+    endpoint = request.args.get("endpoint", "")
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT is_admin, player_id, pref_all, pref_closing FROM push_subscriptions WHERE endpoint=?", (endpoint,))
+    r = c.fetchone()
+    conn.close()
+    mine = bool(r) and ((role == "admin" and r[0] == 1) or (role == "player" and r[0] == 0 and r[1] == pid))
+    return jsonify({"role": role, "subscribed": mine,
+                    "pref_all": bool(r[2]) if mine else True,
+                    "pref_closing": bool(r[3]) if mine else True})
+
+
+@app.route("/push/subscribe", methods=["POST"])
+def push_subscribe():
+    role, pid = _push_owner()
+    data = _json_body()
+    if role is None:
+        return jsonify({"error": "not logged in"}), 401
+    if data is None:
+        return jsonify({"error": "json required"}), 400
+    sub = data.get("subscription") or {}
+    keys = sub.get("keys") or {}
+    endpoint, p256dh, auth = sub.get("endpoint"), keys.get("p256dh"), keys.get("auth")
+    if not (isinstance(endpoint, str) and isinstance(p256dh, str) and isinstance(auth, str)) or len(endpoint) > 1000:
+        return jsonify({"error": "bad subscription"}), 400
+    if not _endpoint_allowed(endpoint):
+        return jsonify({"error": "unsupported push service"}), 400
+    pref_all = 0 if data.get("pref_all") is False else 1
+    pref_closing = 0 if data.get("pref_closing") is False else 1
+    conn = sqlite3.connect(DB_NAME)
+    conn.execute("""INSERT INTO push_subscriptions (endpoint,p256dh,auth,is_admin,player_id,pref_all,pref_closing,created_at)
+                    VALUES (?,?,?,?,?,?,?,?)
+                    ON CONFLICT(endpoint) DO UPDATE SET p256dh=excluded.p256dh, auth=excluded.auth,
+                        is_admin=excluded.is_admin, player_id=excluded.player_id,
+                        pref_all=excluded.pref_all, pref_closing=excluded.pref_closing""",
+                 (endpoint, p256dh, auth, 1 if role == "admin" else 0, pid, pref_all, pref_closing,
+                  datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/push/unsubscribe", methods=["POST"])
+def push_unsubscribe():
+    role, pid = _push_owner()
+    data = _json_body()
+    if role is None:
+        return jsonify({"error": "not logged in"}), 401
+    if data is None:
+        return jsonify({"error": "json required"}), 400
+    conn = sqlite3.connect(DB_NAME)
+    if role == "admin":
+        conn.execute("DELETE FROM push_subscriptions WHERE endpoint=? AND is_admin=1", (data.get("endpoint", ""),))
+    else:
+        conn.execute("DELETE FROM push_subscriptions WHERE endpoint=? AND is_admin=0 AND player_id=?", (data.get("endpoint", ""), pid))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/push/prefs", methods=["POST"])
+def push_prefs():
+    role, pid = _push_owner()
+    data = _json_body()
+    if role is None:
+        return jsonify({"error": "not logged in"}), 401
+    if data is None:
+        return jsonify({"error": "json required"}), 400
+    col = "pref_all" if role == "admin" else "pref_closing"
+    val = 1 if data.get("enabled") else 0
+    conn = sqlite3.connect(DB_NAME)
+    if role == "admin":
+        conn.execute(f"UPDATE push_subscriptions SET {col}=? WHERE endpoint=? AND is_admin=1", (val, data.get("endpoint", "")))
+    else:
+        conn.execute(f"UPDATE push_subscriptions SET {col}=? WHERE endpoint=? AND is_admin=0 AND player_id=?", (val, data.get("endpoint", ""), pid))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/push/test", methods=["POST"])
+def push_test():
+    """Sends a test notification to the calling device only."""
+    role, pid = _push_owner()
+    data = _json_body()
+    if role is None:
+        return jsonify({"error": "not logged in"}), 401
+    if data is None:
+        return jsonify({"error": "json required"}), 400
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    if role == "admin":
+        c.execute("SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE endpoint=? AND is_admin=1", (data.get("endpoint", ""),))
+    else:
+        c.execute("SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE endpoint=? AND is_admin=0 AND player_id=?", (data.get("endpoint", ""), pid))
+    rows = c.fetchall()
+    conn.close()
+    if not rows:
+        return jsonify({"ok": False, "error": "not subscribed"}), 404
+    sent = send_push(rows, {"title": "Obavijesti rade ✅", "body": "Ovako će izgledati obavijesti s Kladionice.",
+                            "url": "/picks", "tag": "test"})
+    return jsonify({"ok": sent > 0})
+
+
+# ---------------------------------------------------------------------------
+# Startup: make sure the database schema/migrations and push keys exist no matter how
+# the app is launched (python app.py, gunicorn, flask run, cron script...).
+# ---------------------------------------------------------------------------
+try:
+    init_db()
+    vapid_public_key()
+except Exception as _e:      # e.g. two workers racing to migrate - the other one wins
+    print("[startup] init warning:", repr(_e))
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    init_db()
     if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
         threading.Thread(target=auto_update, daemon=True).start()
     app.run(debug=True)

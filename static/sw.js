@@ -1,7 +1,7 @@
 /* Propali Kladioničari – service worker.
    Pages always come from the network (they are login-gated and dynamic), so users
    never see stale data. Only static files are cached; offline shows a friendly page. */
-const VERSION = 'klada-v1';
+const VERSION = 'klada-v2';
 const PRECACHE = [
   '/static/offline.html',
   '/static/icons/icon-192.png',
@@ -46,4 +46,33 @@ self.addEventListener('fetch', event => {
     );
   }
   // everything else (/chart-data, /api/*, ...) is network only
+});
+
+/* ── Web Push ─────────────────────────────────────────────────────────── */
+self.addEventListener('push', event => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; }
+  catch (e) { d = { body: event.data ? event.data.text() : '' }; }
+  event.waitUntil(self.registration.showNotification(d.title || 'Kladionica', {
+    body: d.body || '',
+    icon: '/static/icons/icon-192.png',
+    tag: d.tag || undefined,          // same tag = replaces the older notification instead of stacking
+    renotify: !!d.tag,
+    data: { url: d.url || '/' }
+  }));
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const target = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      for (const c of list) {
+        if (new URL(c.url).origin === self.location.origin && 'focus' in c) {
+          return c.focus().then(w => (w && 'navigate' in w) ? w.navigate(target) : null);
+        }
+      }
+      return self.clients.openWindow(target);
+    })
+  );
 });
