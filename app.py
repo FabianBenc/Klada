@@ -26,6 +26,8 @@ ADMIN_PASSWORD = "password123"
 # Everything else is gated by the before_request hook below.
 PUBLIC_ENDPOINTS = {
     "login", "player_login", "static",
+    # PWA files must load before login (browser fetches them without a session)
+    "pwa_manifest", "pwa_service_worker",
     # The /api/* routes have their own X-Api-Key auth (used by the Flutter
     # admin app) and are intentionally independent of the session login.
     "api_picks_status", "api_picks_for_slot", "api_change_requests",
@@ -900,7 +902,7 @@ def index():
         bets=bets,
         player_names=get_player_names(),
         active_player_names=get_active_player_names(),
-        all_players=get_all_players_with_status(),
+        all_players=get_all_players_with_status() if session.get("admin_logged_in") else [],
         admin_logged_in=session.get("admin_logged_in"),
         loss_streaks=get_loss_streaks(),
         win_streaks=get_win_streaks(),
@@ -918,6 +920,49 @@ def index():
 # ---------------------------------------------------------------------------
 # Routes: Other
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# PWA: manifest + service worker (the worker must live at the site root so
+# that its scope covers every page)
+# ---------------------------------------------------------------------------
+
+@app.route("/manifest.webmanifest")
+def pwa_manifest():
+    manifest = {
+        "name": "Propali Kladioničari",
+        "short_name": "Kladionica",
+        "description": "Grupno klađenje – tiketi, parovi i poredak.",
+        "lang": "hr",
+        "start_url": "/",
+        "scope": "/",
+        "display": "standalone",
+        "orientation": "portrait",
+        "background_color": "#222831",
+        "theme_color": "#222831",
+        "icons": [
+            {"src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": "/static/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+        ],
+        "shortcuts": [
+            {"name": "Parovi", "url": "/picks"},
+            {"name": "Poredak", "url": "/leaderboard"},
+        ],
+    }
+    resp = jsonify(manifest)
+    resp.headers["Content-Type"] = "application/manifest+json"
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
+@app.route("/sw.js")
+def pwa_service_worker():
+    from flask import send_from_directory
+    resp = send_from_directory(os.path.join(app.root_path, "static"), "sw.js", mimetype="application/javascript")
+    resp.headers["Service-Worker-Allowed"] = "/"
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
 
 @app.route("/pravila")
 def pravila():
@@ -1547,6 +1592,11 @@ def player_profile(player_id):
         conn.close()
         return "Igrač nije pronađen.", 404
 
+    # Inactive players are hidden from everyone except the admin.
+    if not session.get("admin_logged_in") and player_id not in get_active_player_names(conn):
+        conn.close()
+        return "Igrač nije pronađen.", 404
+
     player_name = player_names[player_id]
 
     c.execute("""
@@ -1653,9 +1703,9 @@ def get_current_slot_info():
     else:
         next_monday = (now - timedelta(days=weekday)).replace(hour=0, minute=0, second=0, microsecond=0)
     weekday_opens = next_monday - timedelta(days=1)
-    weekday_locks = next_monday + timedelta(hours=12)
+    weekday_locks = next_monday + timedelta(hours=15)
     weekend_opens = next_monday + timedelta(days=2)
-    weekend_locks = next_monday + timedelta(days=4, hours=12)
+    weekend_locks = next_monday + timedelta(days=4, hours=15)
     iso_year, iso_week, _ = next_monday.isocalendar()
     base = f"{iso_year}-W{iso_week:02d}"
     # TEST MODE: start the service with env var SLOTS_TEST_OPEN=1 to keep both slots

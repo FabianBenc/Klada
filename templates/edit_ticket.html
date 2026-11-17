@@ -4,6 +4,14 @@
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='icon.png') }}">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#222831">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Kladionica">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+    <script src="/static/pwa.js" defer></script>
     <title>Uredi tiket – Propali Kladioničari</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -61,7 +69,6 @@
 </head>
 
 <body>
-{% set HIDDEN_NAMES = ['Joza.'] %}
 <div class="window" style="max-width: 760px; margin: 0 auto;">
     <div class="title-bar" style="padding:12px 18px;">
         <div class="title-bar-text"><span class="app-title">Uredi tiket</span></div>
@@ -146,7 +153,6 @@
 
             {% for leg in legs %}
             {% set leg_id, fixture, player_id, odds, leg_result, start_time, score = leg %}
-            {% if player_names.get(player_id) not in HIDDEN_NAMES %}
             <div class="leg-card result-{{ leg_result or 'PENDING' }}">
                 <input type="hidden" name="bet_id" value="{{ leg_id }}">
 
@@ -179,7 +185,6 @@
                     </div>
                 </div>
             </div>
-            {% endif %}
             {% endfor %}
 
             <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:8px;">
